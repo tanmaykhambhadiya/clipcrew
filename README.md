@@ -24,7 +24,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase.
 
 ## Before launch
 
-Replace placeholders: email + social links (`components/Footer.tsx`), Privacy/Terms copy, `NEXT_PUBLIC_SITE_URL`, optional demo video.
+Replace placeholders: Privacy/Terms copy, `NEXT_PUBLIC_SITE_URL`, optional demo video.
 
 ## Deploy
 

@@ -17,7 +17,7 @@ export default function TermsPage() {
         Statistics are taken from the public sources listed on each section. Product previews use illustrative data.
       </p>
       <h2>Contact</h2>
-      <p>Questions? Email hello@clipcrew.in.</p>
+      <p>Questions? Email info@ignitralabs.com.</p>
     </LegalPage>
   );
 }

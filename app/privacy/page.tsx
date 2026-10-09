@@ -16,7 +16,7 @@ export default function PrivacyPage() {
       <h2>How we use it</h2>
       <p>Only to contact you about ClipCrew early access and to reply to your messages. We don&apos;t sell your data.</p>
       <h2>Your choices</h2>
-      <p>Email us at hello@clipcrew.in to see, change or delete what we hold about you.</p>
+      <p>Email us at info@ignitralabs.com to see, change or delete what we hold about you.</p>
     </LegalPage>
   );
 }

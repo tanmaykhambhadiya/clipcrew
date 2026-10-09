@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { InstagramIcon, LinkedInIcon, XIcon } from "./ui/SocialIcons";
+import { InstagramIcon, LinkedInIcon } from "./ui/SocialIcons";
 import { ContactForm } from "./ContactForm";
 
-// TODO before launch: replace placeholder email + social links.
-const EMAIL = "hello@clipcrew.in";
+const EMAIL = "info@ignitralabs.com";
 const socials = [
-  { href: "https://instagram.com/", label: "ClipCrew on Instagram", icon: InstagramIcon },
-  { href: "https://linkedin.com/", label: "ClipCrew on LinkedIn", icon: LinkedInIcon },
-  { href: "https://x.com/", label: "ClipCrew on X", icon: XIcon },
+  { href: "https://www.instagram.com/ignitralabs/", label: "Ignitra Labs on Instagram", icon: InstagramIcon },
+  { href: "https://www.linkedin.com/in/tanmaykhambhadiya/", label: "Tanmay Khambhadiya on LinkedIn", icon: LinkedInIcon },
 ];
 
 export function Footer() {
