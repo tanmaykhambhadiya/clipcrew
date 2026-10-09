@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClipCrew website
 
-## Getting Started
+> One video in. A hundred reels out.
 
-First, run the development server:
+Single-page marketing site with a Join Waitlist modal and a small contact form.
+Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Setup
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. `npm install`
+2. Copy `.env.example` → `.env.local` and fill in:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key)
+   - `SUPABASE_SERVICE_ROLE_KEY` (secret key — server only)
+   - `NEXT_PUBLIC_SITE_URL` (production URL, for OG tags)
+3. In the Supabase SQL editor, run [`supabase/schema.sql`](supabase/schema.sql).
+4. `npm run dev` → http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/?waitlist=creator|promoter|clipper` opens the waitlist with that role pre-selected. `utm_source` and the param are saved to `source`.
+- Spam protection: hidden honeypot field, 2-second minimum fill time on the waitlist, 5 requests / IP / 10 min (in-memory).
+- Drop a `public/demo.mp4` to show the demo video in the Automation section (hidden when absent; checked at build time).
 
-## Learn More
+## Before launch
 
-To learn more about Next.js, take a look at the following resources:
+Replace placeholders: email + social links (`components/Footer.tsx`), Privacy/Terms copy, `NEXT_PUBLIC_SITE_URL`, optional demo video.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Import the repo in Vercel and add the same env vars.
