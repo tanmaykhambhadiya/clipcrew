@@ -5,8 +5,8 @@ import { Reveal } from "./ui/Reveal";
 import { JoinWaitlistLink } from "./JoinWaitlistButton";
 
 const tiles = [
-  { value: 9, suffix: " MO", text: "live campaign" },
-  { value: 20, suffix: "M", text: "views a month at peak" },
+  { value: 2, suffix: " MO", text: "live campaign" },
+  { value: 25, suffix: "M", text: "views a month at our peak" },
   { value: 5, suffix: " × 1M+", text: "reels past 1M views" },
   { value: 15, suffix: "", text: "accounts run by a 5-person team" },
 ];
@@ -16,7 +16,7 @@ export function TrackRecord() {
     <section className="section bg-ink text-cream">
       <div className="container-site">
         <Reveal>
-          <SectionHeading eyebrow="Track record" line1="9 months in the game." line2="Before we built the platform." />
+          <SectionHeading eyebrow="Track record" line1="2 months in the game." line2="Before we built the platform." />
         </Reveal>
 
         <ul className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

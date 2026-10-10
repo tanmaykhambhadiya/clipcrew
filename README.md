@@ -12,7 +12,6 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase.
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key)
    - `SUPABASE_SERVICE_ROLE_KEY` (secret key — server only)
-   - `NEXT_PUBLIC_SITE_URL` (production URL, for OG tags)
 3. In the Supabase SQL editor, run [`supabase/schema.sql`](supabase/schema.sql).
 4. `npm run dev` → http://localhost:3000
 
@@ -24,7 +23,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase.
 
 ## Before launch
 
-Replace placeholders: Privacy/Terms copy, `NEXT_PUBLIC_SITE_URL`, optional demo video.
+Replace placeholders: Privacy/Terms copy, team roles (`lib/team.ts`), optional demo video.
 
 ## Deploy
 

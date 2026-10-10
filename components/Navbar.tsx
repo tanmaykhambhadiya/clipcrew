@@ -6,9 +6,10 @@ import { cn } from "@/lib/cn";
 import { JoinWaitlistButton } from "./JoinWaitlistButton";
 
 const links = [
+  { href: "#why-clipping", label: "Why clipping" },
   { href: "#how-it-works", label: "How it works" },
   { href: "#automation", label: "Automation" },
-  { href: "#platform", label: "Platform" },
+  { href: "#team", label: "Team" },
   { href: "#contact", label: "Contact" },
 ];
 

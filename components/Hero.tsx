@@ -83,7 +83,7 @@ export function Hero() {
             </a>
           </div>
           <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-dark/80 md:text-xs">
-            9 months of clipping · 5 reels past 1M views
+            25M views a month at peak · 5 reels past 1M views
           </p>
         </div>
 

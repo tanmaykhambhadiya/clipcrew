@@ -16,13 +16,17 @@ const title = "ClipCrew — One video in. A hundred reels out.";
 const description =
   "ClipCrew turns podcasts, videos and film trailers into hundreds of short-form reels through a trained clipper network and automation. Join the waitlist.";
 
+const SITE_URL = "https://clipcrew.ignitralabs.com";
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(SITE_URL),
   title,
   description,
+  alternates: { canonical: "/" },
   openGraph: {
     title,
     description,
+    url: SITE_URL,
     type: "website",
     siteName: "ClipCrew",
     images: [{ url: "/og.png", width: 1200, height: 630, alt: "ClipCrew — One video in. A hundred reels out." }],
