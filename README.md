@@ -23,7 +23,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase.
 
 ## Before launch
 
-Replace placeholders: Privacy/Terms copy, team roles (`lib/team.ts`), optional demo video.
+Replace placeholders: Privacy/Terms copy, optional demo video.
 
 ## Deploy
 
