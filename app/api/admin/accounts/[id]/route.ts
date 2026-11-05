@@ -5,6 +5,16 @@ import { audit } from "@/lib/portal/session";
 import { PLATFORM_LABELS } from "@/components/portal/ui";
 
 const schema = z.discriminatedUnion("action", [
+  // Staff type the code by hand; it is sent to the clipper's inbox to put in their bio.
+  z.object({
+    action: z.literal("set_code"),
+    code: z
+      .string()
+      .trim()
+      .min(3, "The code needs at least 3 characters.")
+      .max(30, "Keep the code under 30 characters.")
+      .regex(/^[A-Za-z0-9 _#.-]+$/, "Use letters, numbers, spaces and - _ # . only."),
+  }),
   z.object({ action: z.literal("verify") }),
   z.object({ action: z.literal("reject"), reason: z.string().trim().min(3, "Give the clipper a reason.").max(300) }),
   z.object({ action: z.literal("revoke"), reason: z.string().trim().min(3, "Give the clipper a reason.").max(300) }),
@@ -23,7 +33,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const supabase = getSupabaseAdmin();
   const { data: acc } = await supabase
     .from("social_accounts")
-    .select("id, clipper_id, platform, username, status, verified_by, verified_at")
+    .select("id, clipper_id, platform, username, status, verify_code, verified_by, verified_at")
     .eq("id", params.id)
     .maybeSingle();
   if (!acc) return fail(404, "Account not found.");
@@ -33,8 +43,28 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const before = { status: acc.status, verified_by: acc.verified_by, verified_at: acc.verified_at };
 
   switch (d.action) {
+    case "set_code": {
+      if (acc.status !== "pending") return fail(409, "Codes can only be sent to accounts waiting for verification.");
+      const { data: updated, error } = await supabase
+        .from("social_accounts")
+        .update({ verify_code: d.code })
+        .eq("id", acc.id)
+        .eq("status", "pending")
+        .select("id");
+      if (!error && !updated?.length) return fail(409, "Someone else just changed this account. Refresh and try again.");
+      if (error) return fail(500, "Couldn't save the code.");
+      await audit(me.id, "ACCOUNT_CODE_SENT", "social_account", acc.id, { verify_code: acc.verify_code }, { verify_code: d.code, platform: acc.platform, username: acc.username });
+      await notify(acc.clipper_id, {
+        kind: "info",
+        title: `Your verification code for ${platformLabel} ${handle}`,
+        body: `Add this code to your ${platformLabel} bio: ${d.code}\nKeep it there until the account shows Verified — we'll check it soon.`,
+        createdBy: me.id,
+      });
+      return ok();
+    }
     case "verify": {
       if (acc.status === "verified") return fail(409, "This account is already verified.");
+      if (!acc.verify_code) return fail(409, "Send the clipper a code first, then verify once it's in their bio.");
       const after = { status: "verified", verified_by: me.id, verified_at: new Date().toISOString() };
       const { data: updated, error } = await supabase.from("social_accounts").update(after).eq("id", acc.id).eq("status", acc.status).select("id");
       if (!error && !updated?.length) return fail(409, "Someone else just changed this account. Refresh and try again.");

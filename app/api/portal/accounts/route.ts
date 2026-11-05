@@ -1,4 +1,3 @@
-import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { fail, guard, ok, parseBody } from "@/lib/portal/guard";
@@ -11,14 +10,6 @@ const createSchema = z.object({
   platform: z.enum(PLATFORMS, { message: "Pick a platform." }),
   handle: z.string().trim().min(1, "Enter your username or profile link.").max(300),
 });
-
-// No 0/O, 1/I/L — easy to read off a phone screen and type into a bio.
-const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function newVerifyCode() {
-  let s = "";
-  for (let i = 0; i < 6; i++) s += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  return `CC-${s}`;
-}
 
 // GET /api/portal/accounts — the signed-in clipper's own accounts.
 export async function GET() {
@@ -33,7 +24,8 @@ export async function GET() {
   return ok({ accounts: data });
 }
 
-// POST /api/portal/accounts — add an account; returns its verification code.
+// POST /api/portal/accounts — add an account. It waits for staff to type and send a verification code
+// (verify_code = "" until then); the clipper puts that code in their bio and staff verify it.
 export async function POST(req: Request) {
   const g = await guard({ clipper: true });
   if ("error" in g) return g.error;
@@ -66,10 +58,9 @@ export async function POST(req: Request) {
     return fail(409, msg, { handle: msg });
   }
 
-  const verifyCode = newVerifyCode();
   const { data: created, error } = await supabase
     .from("social_accounts")
-    .insert({ clipper_id: me.id, platform, username, verify_code: verifyCode })
+    .insert({ clipper_id: me.id, platform, username, verify_code: "" })
     .select("id, platform, username, verify_code, status, verified_at, created_at")
     .single();
   if (error || !created) {

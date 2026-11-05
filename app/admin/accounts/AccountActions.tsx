@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LoaderCircle, ShieldOff, X } from "lucide-react";
+import { Check, LoaderCircle, Send, ShieldOff, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/portal/client";
@@ -8,7 +8,68 @@ import { errorText, field, smallBtn } from "@/components/portal/ui";
 
 type Status = "pending" | "verified" | "rejected";
 
-export function AccountActions({ id, handle, status, isSuper }: { id: string; handle: string; status: Status; isSuper: boolean }) {
+/** Staff type the verification code here and send it to the clipper's inbox. */
+export function CodeCell({ id, code, status }: { id: string; code: string; status: Status }) {
+  const router = useRouter();
+  const [value, setValue] = useState(code);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+
+  if (status !== "pending") {
+    return code ? (
+      <span className="rounded-lg bg-ink px-2.5 py-1 font-mono text-sm tracking-wider text-cream">{code}</span>
+    ) : (
+      <span className="text-xs text-muted-dark">—</span>
+    );
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setSent(false);
+    try {
+      await api(`/api/admin/accounts/${id}`, { method: "PATCH", json: { action: "set_code", code: value.trim() } });
+      setSent(true);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't send the code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const changed = value.trim() !== code;
+  return (
+    <form onSubmit={submit} className="w-[200px] space-y-1.5">
+      <label htmlFor={`code-${id}`} className="sr-only">
+        Verification code
+      </label>
+      <input
+        id={`code-${id}`}
+        className={`${field} font-mono tracking-wider`}
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setSent(false);
+        }}
+        placeholder="Type a code"
+        maxLength={30}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      <button type="submit" className={`${smallBtn} border-lime/60 text-lime`} disabled={busy || value.trim().length < 3 || !changed}>
+        {busy ? <LoaderCircle size={13} className="animate-spin" /> : <Send size={13} />} {code ? "Update & resend" : "Send code"}
+      </button>
+      {!code && !sent && <p className="text-xs text-[#f5c451]">Waiting for a code</p>}
+      {sent && <p className="text-xs text-lime">Sent to the clipper&apos;s inbox.</p>}
+      {error && <p className={errorText}>{error}</p>}
+    </form>
+  );
+}
+
+export function AccountActions({ id, handle, status, isSuper, hasCode }: { id: string; handle: string; status: Status; isSuper: boolean; hasCode: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -77,7 +138,8 @@ export function AccountActions({ id, handle, status, isSuper }: { id: string; ha
           <button
             type="button"
             className={`${smallBtn} border-lime/60 text-lime`}
-            disabled={busy}
+            disabled={busy || !hasCode}
+            title={hasCode ? undefined : "Send the clipper a code first"}
             onClick={() => {
               if (status === "rejected" && !window.confirm(`${handle} was rejected before. Verify it now?`)) return;
               send({ action: "verify" });

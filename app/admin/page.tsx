@@ -47,16 +47,18 @@ async function loadStats(me: Me) {
   const none = scope !== null && scope.length === 0;
   const lastWeek = addDays(currentWeekStart(), -7);
 
-  const campaigns = await safe(async () => {
-    if (none) return [] as Array<{ id: string; name: string; status: string }>;
-    let q = db.from("campaigns").select("id, name, status").order("created_at", { ascending: false });
-    if (scope) q = q.in("id", scope);
-    const { data, error } = await q;
-    if (error) throw error;
-    return (data ?? []) as Array<{ id: string; name: string; status: string }>;
-  }, null);
-
-  const clipperIds = await safe(() => clipperIdsForCampaigns(scope), [] as string[] | null);
+  // Independent loads run together — each database round trip is slow from the app server.
+  const [campaigns, clipperIds] = await Promise.all([
+    safe(async () => {
+      if (none) return [] as Array<{ id: string; name: string; status: string }>;
+      let q = db.from("campaigns").select("id, name, status").order("created_at", { ascending: false });
+      if (scope) q = q.in("id", scope);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; status: string }>;
+    }, null),
+    safe(() => clipperIdsForCampaigns(scope), [] as string[] | null),
+  ]);
 
   const [activeClippers, pending, week, unpaid, fines] = await Promise.all([
     safe(async () => {
@@ -146,6 +148,10 @@ function when(iso: string) {
 
 export default async function AdminHome() {
   const me = (await getMe())!; // the layout already redirects signed-out users and clippers
+  // Start the activity feed alongside the stats instead of after them.
+  const recentPromise = can(me, "audit.view")
+    ? safe(async () => (await loadActivity({ limit: 10 })).entries, null as ActivityEntry[] | null)
+    : Promise.resolve(null as ActivityEntry[] | null);
   const s = await loadStats(me);
   const dash = "—";
 
@@ -209,8 +215,7 @@ export default async function AdminHome() {
     { href: "/admin/users", label: "Add user", icon: UserPlus, show: can(me, "users.create") },
   ].filter((a) => a.show);
 
-  let recent: ActivityEntry[] | null = null;
-  if (can(me, "audit.view")) recent = await safe(async () => (await loadActivity({ limit: 10 })).entries, null);
+  const recent = await recentPromise;
 
   return (
     <div className="space-y-10">

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -29,19 +30,23 @@ export type Me = {
   permissions: Permission[];
 };
 
-/** The signed-in, still-active user — or null. Checked against the database on every call, so a
- *  terminated user loses access immediately even while their token is still valid. */
-export async function getMe(): Promise<Me | null> {
-  const { data } = await supabaseSession().auth.getUser();
-  if (!data.user) return null;
+/** The signed-in, still-active user — or null. Checked against the database on every request, so a
+ *  terminated user loses access immediately even while their token is still valid.
+ *  - getClaims() verifies the session JWT locally (asymmetric signing keys), instead of a round trip
+ *    to Supabase Auth like getUser() — the app server and database are far apart, so trips are costly.
+ *  - cache() runs this once per request even though the layout and the page both call it. */
+export const getMe = cache(async (): Promise<Me | null> => {
+  const { data } = await supabaseSession().auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (!userId) return null;
   const { data: p } = await getSupabaseAdmin()
     .from("profiles")
     .select("id, login_id, full_name, role, status, permissions")
-    .eq("id", data.user.id)
+    .eq("id", userId)
     .maybeSingle();
   if (!p || p.status !== "active") return null;
   return { id: p.id, loginId: p.login_id, fullName: p.full_name, role: p.role, permissions: p.permissions ?? [] };
-}
+});
 
 export const isStaff = (me: Me) => me.role === "super_admin" || me.role === "admin";
 

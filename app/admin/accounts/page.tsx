@@ -7,7 +7,7 @@ import { formatDate } from "@/lib/portal/weeks";
 import { EmptyState, ErrorNote, PLATFORM_LABELS, PageTitle, Pill, TableWrap, field, smallBtn, td, th, tr } from "@/components/portal/ui";
 import { profileUrl } from "@/app/portal/accounts/handle";
 import { ACCOUNT_TABS, loadAccountQueue, type AccountTab } from "./query";
-import { AccountActions } from "./AccountActions";
+import { AccountActions, CodeCell } from "./AccountActions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
 
   return (
     <div className="space-y-8">
-      <PageTitle eyebrow="Accounts" line1="Account checks" line2="code in bio? verify it." />
+      <PageTitle eyebrow="Accounts" line1="Account checks" line2="send a code, then verify." />
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <nav className="flex flex-wrap gap-2" aria-label="Filter by status">
@@ -85,7 +85,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
             <tr className={tr}>
               <th className={th}>Clipper</th>
               <th className={th}>Account</th>
-              <th className={th}>Code to look for</th>
+              <th className={th}>Verification code</th>
               <th className={th}>Submitted</th>
               <th className={th}>Status</th>
               <th className={th}>
@@ -120,7 +120,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
                     )}
                   </td>
                   <td className={td}>
-                    <span className="rounded-lg bg-ink px-2.5 py-1 font-mono text-sm tracking-wider text-cream">{r.verify_code}</span>
+                    <CodeCell id={r.id} code={r.verify_code} status={r.status} />
                   </td>
                   <td className={td}>{formatDate(r.created_at)}</td>
                   <td className={td}>
@@ -133,7 +133,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
                     )}
                   </td>
                   <td className={`${td} text-right`}>
-                    <AccountActions id={r.id} handle={`@${r.username}`} status={r.status} isSuper={isSuper} />
+                    <AccountActions id={r.id} handle={`@${r.username}`} status={r.status} isSuper={isSuper} hasCode={!!r.verify_code} />
                   </td>
                 </tr>
               );

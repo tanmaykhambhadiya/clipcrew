@@ -31,6 +31,7 @@ export const ACTION_LABELS: Record<string, string> = {
 
   ACCOUNT_ADDED: "Social account added",
   ACCOUNT_SUBMITTED: "Social account submitted",
+  ACCOUNT_CODE_SENT: "Verification code sent",
   ACCOUNT_VERIFIED: "Social account verified",
   ACCOUNT_REJECTED: "Social account rejected",
   ACCOUNT_REMOVED: "Social account removed",

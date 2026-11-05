@@ -17,8 +17,9 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) {
+  // getClaims() refreshes an expired session and verifies the JWT locally — no Auth server round trip.
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims?.sub) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

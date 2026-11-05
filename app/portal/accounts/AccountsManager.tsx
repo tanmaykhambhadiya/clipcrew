@@ -177,14 +177,14 @@ function AddAccountDialog({ open, onClose, onAdded }: { open: boolean; onClose: 
         </div>
 
         <p className="rounded-2xl border border-line bg-ink p-4 text-sm text-muted-dark">
-          Next you&apos;ll get a code like <span className="font-mono text-cream">CC-7K2P9Q</span>. Put it in your bio so our team can confirm the account is yours.
+          Our team will send a verification code to your inbox. Put it in your bio so we can confirm the account is yours.
         </p>
 
         <ErrorNote>{errors.form}</ErrorNote>
 
         <div className="flex flex-wrap gap-2">
           <Button type="submit" size="sm" disabled={saving}>
-            {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Plus size={16} />} Get my code
+            {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Plus size={16} />} Add account
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={onClose}>
             Cancel
@@ -232,18 +232,17 @@ export function AccountsManager({ accounts }: { accounts: ClipperAccount[] }) {
 
       {justAdded && (
         <Card className="border-lime bg-lime/10">
-          <Label className="text-lime">One more step</Label>
+          <Label className="text-lime">Account added</Label>
           <p className="mt-3 text-lg">
-            Add <span className="font-mono font-semibold text-lime">{justAdded.verify_code}</span> to your{" "}
-            {PLATFORM_LABELS[justAdded.platform] ?? ""} bio for <span className="font-mono">@{justAdded.username}</span>, then wait — our team verifies within 48 hours.
+            We&apos;ll send you a verification code for <span className="font-mono">@{justAdded.username}</span> in your inbox. Add it to your{" "}
+            {PLATFORM_LABELS[justAdded.platform] ?? ""} bio, and our team will verify the account.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <CopyCode code={justAdded.verify_code} />
             <button type="button" className={smallBtn} onClick={() => setJustAdded(null)}>
               Got it
             </button>
           </div>
-          <p className="mt-3 text-xs text-muted-dark">Keep the code in your bio until the account shows Verified. You&apos;ll get a message in your inbox.</p>
+          <p className="mt-3 text-xs text-muted-dark">Keep the code in your bio until the account shows Verified.</p>
         </Card>
       )}
 
@@ -277,11 +276,19 @@ export function AccountsManager({ accounts }: { accounts: ClipperAccount[] }) {
                 <td className={td}>
                   <Pill tone={STATUS_TONE[a.status]}>{a.status}</Pill>
                   {a.status === "verified" && a.verified_at && <p className="mt-1 text-xs text-muted-dark">{formatDate(a.verified_at)}</p>}
-                  {a.status === "pending" && <p className="mt-1 text-xs text-muted-dark">Checked within 48h</p>}
+                  {a.status === "pending" && (
+                    <p className="mt-1 text-xs text-muted-dark">{a.verify_code ? "Put the code in your bio — we'll check it" : "Code coming to your inbox"}</p>
+                  )}
                   {a.status === "rejected" && a.reason && <p className="mt-1 max-w-[220px] text-xs text-[#ff8a7a]">{a.reason}</p>}
                 </td>
                 <td className={td}>
-                  {a.status === "verified" ? (
+                  {!a.verify_code ? (
+                    a.status === "pending" ? (
+                      <Pill tone="amber">waiting for code</Pill>
+                    ) : (
+                      <span className="text-xs text-muted-dark">—</span>
+                    )
+                  ) : a.status === "verified" ? (
                     <span className="font-mono text-sm text-muted-dark">{a.verify_code}</span>
                   ) : (
                     <CopyCode code={a.verify_code} />
