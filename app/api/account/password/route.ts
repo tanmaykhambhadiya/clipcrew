@@ -1,10 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { fail, ok, parseBody } from "@/lib/portal/guard";
-import { loginIdToEmail } from "@/lib/portal/permissions";
-import { audit, getMe } from "@/lib/portal/session";
+import { hashPassword, verifyPassword } from "@/lib/portal/password";
+import { audit, endAllSessions, getMe } from "@/lib/portal/session";
 
 const schema = z
   .object({
@@ -27,27 +26,21 @@ export async function POST(req: Request) {
   if ("error" in body) return body.error;
   const { currentPassword, newPassword } = body.data;
 
-  // Check the current password with a throwaway client so the visitor's own session cookies are untouched.
-  const probe = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-  let verified = false;
-  try {
-    const { data, error } = await probe.auth.signInWithPassword({ email: loginIdToEmail(me.loginId), password: currentPassword });
-    verified = !error && data.user?.id === me.id;
-    if (data.session) await probe.auth.signOut({ scope: "local" }).catch(() => undefined); // drop the probe session
-  } catch {
-    verified = false;
-  }
+  const db = getSupabaseAdmin();
+  const { data: cred } = await db.from("credentials").select("password_hash").eq("user_id", me.id).maybeSingle();
   // Same answer for every failure, whatever the reason.
-  if (!verified) return fail(400, WRONG, { currentPassword: WRONG });
+  if (!(await verifyPassword(currentPassword, cred?.password_hash))) return fail(400, WRONG, { currentPassword: WRONG });
 
-  const { error } = await getSupabaseAdmin().auth.admin.updateUserById(me.id, { password: newPassword });
+  const { error } = await db
+    .from("credentials")
+    .update({ password_hash: await hashPassword(newPassword), updated_at: new Date().toISOString() })
+    .eq("user_id", me.id);
   if (error) {
     console.error("[account/password] update failed", error);
     return fail(500, "Couldn't change your password. Please try again.");
   }
 
+  await endAllSessions(me.id, { keepCurrent: true }); // sign out other devices, stay signed in here
   await audit(me.id, "PASSWORD_CHANGED", "profile", me.id);
   return ok();
 }

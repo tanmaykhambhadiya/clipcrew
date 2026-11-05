@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
-import { loginIdToEmail } from "@/lib/portal/permissions";
-import { audit, supabaseSession } from "@/lib/portal/session";
+import { verifyPassword } from "@/lib/portal/password";
+import { audit, startSession } from "@/lib/portal/session";
 
 const bodySchema = z.object({
   loginId: z.string().trim().toLowerCase().min(1).max(30),
@@ -21,23 +21,21 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json(BAD, { status: 400 });
   const { loginId, password } = parsed.data;
 
-  const supabase = supabaseSession();
-  const { data, error } = await supabase.auth.signInWithPassword({ email: loginIdToEmail(loginId), password });
-  if (error || !data.user) return NextResponse.json(BAD, { status: 401 });
-
-  const { data: profile } = await getSupabaseAdmin()
+  const { data } = await getSupabaseAdmin()
     .from("profiles")
-    .select("role, status")
-    .eq("id", data.user.id)
+    .select("id, role, status, credentials(password_hash)")
+    .eq("login_id", loginId)
     .maybeSingle();
-  if (!profile || profile.status !== "active") {
-    await supabase.auth.signOut();
-    return NextResponse.json(
-      { ok: false, error: profile ? "This account has been deactivated. Contact your admin." : BAD.error },
-      { status: 403 },
-    );
+  const profile = data as { id: string; role: string; status: string; credentials: { password_hash: string } | null } | null;
+
+  // verifyPassword does the same work for unknown users, so timing doesn't reveal valid login IDs.
+  const valid = await verifyPassword(password, profile?.credentials?.password_hash);
+  if (!profile || !valid) return NextResponse.json(BAD, { status: 401 });
+  if (profile.status !== "active") {
+    return NextResponse.json({ ok: false, error: "This account has been deactivated. Contact your admin." }, { status: 403 });
   }
 
-  await audit(data.user.id, "LOGIN", "profile", data.user.id);
+  await startSession(profile.id);
+  await audit(profile.id, "LOGIN", "profile", profile.id);
   return NextResponse.json({ ok: true, redirect: profile.role === "clipper" ? "/portal" : "/admin" });
 }

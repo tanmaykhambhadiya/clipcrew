@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { PERMISSION_KEYS, loginIdToEmail } from "@/lib/portal/permissions";
-import { generatePassword } from "@/lib/portal/password";
+import { PERMISSION_KEYS } from "@/lib/portal/permissions";
+import { generatePassword, hashPassword } from "@/lib/portal/password";
 import { audit, can, getMe, isStaff } from "@/lib/portal/session";
 
 const createSchema = z.object({
@@ -54,33 +54,37 @@ export async function POST(req: Request) {
   if (taken) return NextResponse.json({ ok: false, error: "That login ID is already taken.", fields: { loginId: "Already taken" } }, { status: 409 });
 
   const password = d.password ?? generatePassword();
-  const { data: created, error: authError } = await supabase.auth.admin.createUser({
-    email: loginIdToEmail(d.loginId),
-    password,
-    email_confirm: true,
-  });
-  if (authError || !created.user) {
-    console.error("[users] auth create failed", authError);
-    return NextResponse.json({ ok: false, error: "Couldn't create the login." }, { status: 500 });
-  }
-
-  const { error: profileError } = await supabase.from("profiles").insert({
-    id: created.user.id,
-    login_id: d.loginId,
-    full_name: d.fullName,
-    role: d.role,
-    permissions: d.role === "admin" ? d.permissions ?? [] : [],
-    phone: d.phone || null,
-    upi_id: d.upiId || null,
-    created_by: me.id,
-  });
-  if (profileError) {
-    await supabase.auth.admin.deleteUser(created.user.id); // don't leave a login without a profile
+  const { data: created, error: profileError } = await supabase
+    .from("profiles")
+    .insert({
+      login_id: d.loginId,
+      full_name: d.fullName,
+      role: d.role,
+      permissions: d.role === "admin" ? d.permissions ?? [] : [],
+      phone: d.phone || null,
+      upi_id: d.upiId || null,
+      created_by: me.id,
+    })
+    .select("id")
+    .single();
+  if (profileError || !created) {
+    if (profileError?.code === "23505") {
+      return NextResponse.json({ ok: false, error: "That login ID is already taken.", fields: { loginId: "Already taken" } }, { status: 409 });
+    }
     console.error("[users] profile insert failed", profileError);
     return NextResponse.json({ ok: false, error: "Couldn't save the user." }, { status: 500 });
   }
 
-  await audit(me.id, "USER_CREATED", "profile", created.user.id, null, { loginId: d.loginId, role: d.role });
-  // The password is returned once so the admin can hand it over; it is never stored or shown again.
-  return NextResponse.json({ ok: true, user: { id: created.user.id, loginId: d.loginId }, password });
+  const { error: credError } = await supabase
+    .from("credentials")
+    .insert({ user_id: created.id, password_hash: await hashPassword(password) });
+  if (credError) {
+    await supabase.from("profiles").delete().eq("id", created.id); // don't leave a user who can't log in
+    console.error("[users] credentials insert failed", credError);
+    return NextResponse.json({ ok: false, error: "Couldn't create the login." }, { status: 500 });
+  }
+
+  await audit(me.id, "USER_CREATED", "profile", created.id, null, { loginId: d.loginId, role: d.role });
+  // The password is returned once so the admin can hand it over; only its hash is stored.
+  return NextResponse.json({ ok: true, user: { id: created.id, loginId: d.loginId }, password });
 }

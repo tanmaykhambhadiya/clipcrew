@@ -3,16 +3,13 @@
 > One video in. A hundred reels out.
 
 Single-page marketing site with a Join Waitlist modal and a small contact form.
-Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase.
+Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · self-hosted PostgreSQL + PostgREST.
 
 ## Setup
 
 1. `npm install`
-2. Copy `.env.example` → `.env.local` and fill in:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key)
-   - `SUPABASE_SERVICE_ROLE_KEY` (secret key — server only)
-3. In the Supabase SQL editor, run [`supabase/schema.sql`](supabase/schema.sql).
+2. Copy `.env.example` → `.env.local` and fill in `POSTGREST_URL` and `POSTGREST_JWT_SECRET`.
+3. Database setup (tables, roles, PostgREST): see [db/README.md](db/README.md).
 4. `npm run dev` → http://localhost:3000
 
 ## Notes
@@ -27,4 +24,4 @@ Replace placeholders: Privacy/Terms copy, optional demo video.
 
 ## Deploy
 
-Import the repo in Vercel and add the same env vars.
+Deployed with Coolify (Nixpacks, port 3000). Set the same env vars as `.env.example`.

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { PERMISSION_KEYS } from "@/lib/portal/permissions";
-import { generatePassword } from "@/lib/portal/password";
-import { audit, can, getMe, isStaff } from "@/lib/portal/session";
+import { generatePassword, hashPassword } from "@/lib/portal/password";
+import { audit, can, endAllSessions, getMe, isStaff } from "@/lib/portal/session";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reset_password"), password: z.string().min(8).max(100).optional() }),
@@ -11,8 +11,6 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reactivate") }),
   z.object({ action: z.literal("set_permissions"), permissions: z.array(z.enum(PERMISSION_KEYS as [string, ...string[]])) }),
 ]);
-
-const BAN_FOREVER = "876000h"; // ~100 years
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const me = await getMe();
@@ -44,8 +42,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       const allowed = own || (target.role === "clipper" ? can(me, "users.create") : isSuper);
       if (!allowed) return forbidden();
       const password = body.password ?? generatePassword();
-      const { error } = await supabase.auth.admin.updateUserById(target.id, { password });
+      const { error } = await supabase
+        .from("credentials")
+        .upsert({ user_id: target.id, password_hash: await hashPassword(password), updated_at: new Date().toISOString() });
       if (error) return NextResponse.json({ ok: false, error: "Couldn't reset the password." }, { status: 500 });
+      await endAllSessions(target.id, { keepCurrent: own }); // old password's sessions stop working
       await audit(me.id, "PASSWORD_RESET", "profile", target.id);
       return NextResponse.json({ ok: true, password });
     }
@@ -57,8 +58,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         .update({ status: "terminated", terminated_at: new Date().toISOString(), termination_reason: body.reason })
         .eq("id", target.id);
       if (error) return NextResponse.json({ ok: false, error: "Couldn't terminate the user." }, { status: 500 });
-      // Stop new sign-ins and token refreshes; getMe() already blocks every request from now on.
-      await supabase.auth.admin.updateUserById(target.id, { ban_duration: BAN_FOREVER });
+      // Sign them out everywhere; login refuses terminated users and getMe() blocks every request.
+      await endAllSessions(target.id);
       await audit(me.id, "USER_TERMINATED", "profile", target.id, { status: target.status }, { status: "terminated", reason: body.reason });
       return NextResponse.json({ ok: true });
     }
@@ -69,7 +70,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         .update({ status: "active", terminated_at: null, termination_reason: null })
         .eq("id", target.id);
       if (error) return NextResponse.json({ ok: false, error: "Couldn't reactivate the user." }, { status: 500 });
-      await supabase.auth.admin.updateUserById(target.id, { ban_duration: "none" });
       await audit(me.id, "USER_REACTIVATED", "profile", target.id, { status: target.status }, { status: "active" });
       return NextResponse.json({ ok: true });
     }
