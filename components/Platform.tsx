@@ -3,9 +3,9 @@ import { SectionHeading } from "./ui/SectionHeading";
 import { Reveal } from "./ui/Reveal";
 
 const rows = [
-  { icon: Users, title: "For creators", text: "Launch campaigns, set budgets, track views live." },
-  { icon: Scissors, title: "For clippers", text: "Submit clips; see approvals, rejections and payouts." },
-  { icon: ScanEye, title: "For ClipCrew", text: "Review clips, verify views, run payouts automatically." },
+  { icon: Users, title: "For brands & creators", text: "Set up campaigns, platforms and rules; follow verified views week by week." },
+  { icon: Scissors, title: "For clippers", text: "Verify accounts, join campaigns, see weekly views, rejections, wallet and payouts." },
+  { icon: ScanEye, title: "For the ClipCrew team", text: "Verify accounts, review reels, enter weekly views and run payouts, with every change logged." },
 ];
 
 // Illustrative rising series for the mockup chart (0–100 scale).

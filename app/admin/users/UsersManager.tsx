@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, KeyRound, LoaderCircle, Plus, ShieldOff, UserCheck } from "lucide-react";
+import { Check, Copy, KeyRound, LoaderCircle, MessageCircle, Plus, ShieldOff, UserCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PERMISSIONS, type Permission } from "@/lib/portal/permissions";
@@ -31,12 +31,13 @@ async function api(url: string, init?: RequestInit) {
 function Credentials({ loginId, password, onDone }: { loginId: string; password: string; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
   const text = `ClipCrew login\nLogin ID: ${loginId}\nPassword: ${password}`;
+  const shareText = `Your ClipCrew login\nLogin: https://clipcrew.ignitralabs.com/login\nLogin ID: ${loginId}\nPassword: ${password}\nChange your password after signing in (Settings).`;
   return (
     <div className="rounded-2xl border border-lime bg-lime/10 p-5">
       <p className="font-mono text-xs uppercase tracking-[0.16em] text-lime">Share these now — the password is shown only once</p>
       <p className="mt-3 text-sm">Login ID <span className="ml-2 font-mono text-base font-semibold">{loginId}</span></p>
       <p className="mt-1 text-sm">Password <span className="ml-2 font-mono text-base font-semibold">{password}</span></p>
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true))}
@@ -44,6 +45,14 @@ function Credentials({ loginId, password, onDone }: { loginId: string; password:
         >
           {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copied" : "Copy"}
         </button>
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-lime px-4 py-2 text-sm font-bold text-lime transition hover:bg-lime hover:text-ink"
+        >
+          <MessageCircle size={15} /> Share on WhatsApp
+        </a>
         <button type="button" onClick={onDone} className="rounded-full border border-line px-4 py-2 text-sm text-muted-dark hover:text-cream">
           Done
         </button>

@@ -18,7 +18,7 @@ function PhoneCard({ children }: { children: React.ReactNode }) {
 
 export function Proof() {
   return (
-    <section className="section bg-ink text-cream">
+    <section className="py-20 md:py-24 bg-ink text-cream">
       <div className="container-site">
         <Reveal>
           <SectionHeading eyebrow="The proof" line1="Clipping is how" line2="the biggest creators grow." />

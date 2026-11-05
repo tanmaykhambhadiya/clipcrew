@@ -63,7 +63,7 @@ function Circles() {
 
 export function MarketSizeIndia() {
   return (
-    <section className="section bg-cream text-ink">
+    <section className="py-20 md:py-24 bg-cream text-ink">
       <div className="container-site">
         <Reveal>
           <SectionHeading

@@ -40,7 +40,7 @@ function MarketCard({ title, rows, dark }: { title: string; rows: Row[]; dark?: 
 
 export function Market() {
   return (
-    <section className="section bg-cream text-ink">
+    <section className="py-20 md:py-24 bg-cream text-ink">
       <div className="container-site">
         <Reveal>
           <SectionHeading tone="light" eyebrow="The market" line1="Millions of creators." line2="Not enough distribution." />

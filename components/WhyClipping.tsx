@@ -29,7 +29,7 @@ function SameFollowersVisual() {
 
 export function WhyClipping() {
   return (
-    <section id="why-clipping" className="section scroll-mt-16 bg-ink bg-glow text-cream">
+    <section id="why-clipping" className="py-20 md:py-24 scroll-mt-16 bg-ink bg-glow text-cream">
       <div className="container-site">
         <Reveal>
           <SectionHeading eyebrow="Why clipping exists" line1="Long videos don't travel." line2="Clips do." />

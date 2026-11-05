@@ -74,7 +74,9 @@ export function ErrorNote({ children }: { children?: React.ReactNode }) {
 /** Table wrapper: scrolls horizontally inside its card on small screens. */
 export function TableWrap({ minWidth = 720, children }: { minWidth?: number; children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-3xl border border-line">
+    // `relative` makes this the containing block for absolutely positioned children (e.g. sr-only
+    // header labels) so they're clipped by the scroller instead of widening the page on phones.
+    <div className="relative overflow-x-auto rounded-3xl border border-line">
       <table className="w-full text-left text-sm" style={{ minWidth }}>
         {children}
       </table>

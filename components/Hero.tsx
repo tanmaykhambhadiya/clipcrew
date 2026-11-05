@@ -1,7 +1,36 @@
 import { ArrowDown, Play } from "lucide-react";
 import { buttonClass } from "./ui/Button";
 import { ReelFrame } from "./ui/ReelFrame";
+import { StatNumber } from "./ui/StatNumber";
 import { JoinWaitlistButton } from "./JoinWaitlistButton";
+
+const proof = [
+  { value: 25, suffix: "M", text: "views a month at our peak" },
+  { value: 5, suffix: "", text: "reels past 1M views" },
+  { value: 15, suffix: "", text: "accounts run by our team" },
+  { value: 25, prefix: "~", suffix: "", text: "clippers in the community" },
+];
+
+function ProofStrip() {
+  return (
+    <ul className="mt-16 grid grid-cols-2 gap-3 md:mt-20 lg:grid-cols-4 lg:gap-5" aria-label="ClipCrew track record">
+      {proof.map((p) => (
+        <li
+          key={p.text}
+          className="rounded-3xl border border-line border-t-4 border-t-lime bg-ink-2/80 p-5 backdrop-blur-sm transition-colors duration-300 hover:border-lime md:p-7"
+        >
+          <StatNumber
+            value={p.value}
+            prefix={p.prefix}
+            suffix={p.suffix}
+            className="block font-display text-[40px] font-bold leading-none text-cream md:text-[56px]"
+          />
+          <p className="mt-2 text-sm text-muted-dark md:text-base">{p.text}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function ReelStack() {
   return (
@@ -73,21 +102,24 @@ export function Hero() {
             </span>
           </h1>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-muted-dark md:text-lg">
-            We turn your podcasts, videos and film trailers into hundreds of reels — made by a trained clipper network
-            and our own automation.
+            Your content, working harder. We turn podcasts, videos, streams and trailers into hundreds of native clips,
+            posted by a trained network of verified clippers. You pay only for views we&apos;ve verified.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <JoinWaitlistButton />
+            <JoinWaitlistButton role="creator">Start a campaign</JoinWaitlistButton>
             <a href="#how-it-works" className={buttonClass({ variant: "secondary" })}>
               See how it works <ArrowDown size={18} />
             </a>
           </div>
           <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-dark/80 md:text-xs">
-            25M views a month at peak · 5 reels past 1M views
+            Reels · Shorts · TikTok · X · Facebook
           </p>
         </div>
 
         <ReelStack />
+      </div>
+      <div className="container-site">
+        <ProofStrip />
       </div>
     </section>
   );

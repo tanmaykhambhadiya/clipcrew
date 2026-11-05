@@ -12,7 +12,7 @@ const LIME_SEGMENTS = new Set([5, 11]);
 
 export function Problem() {
   return (
-    <section className="section bg-cream text-ink">
+    <section className="py-20 md:py-24 bg-cream text-ink">
       <div className="container-site">
         <Reveal>
           <SectionHeading tone="light" eyebrow="The problem" line1="Attention moved" line2="to short-form. Most content didn't." />

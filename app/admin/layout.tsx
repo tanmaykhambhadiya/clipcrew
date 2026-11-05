@@ -17,7 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/campaigns", label: "Campaigns", show: true }, // staff see the campaigns assigned to them
     { href: "/admin/views", label: "Weekly views", show: can(me, "views.enter") },
     { href: "/admin/accounts", label: "Accounts", show: can(me, "accounts.verify") },
-    { href: "/admin/rejections", label: "Rejections & fines", show: can(me, "rejections.send") || can(me, "fines.create") },
+    { href: "/admin/rejections", label: "Notices & fines", show: can(me, "rejections.send") || can(me, "fines.create") || can(me, "campaigns.manage") },
     { href: "/admin/payouts", label: "Payouts", show: can(me, "payouts.manage") },
     { href: "/admin/users", label: "Users", show: can(me, "users.create") },
     { href: "/admin/activity", label: "Activity", show: can(me, "audit.view") },

@@ -9,6 +9,12 @@ const socials = [
   { href: "https://www.instagram.com/ignitralabs/", label: "Ignitra Labs on Instagram", icon: InstagramIcon },
   { href: "https://www.linkedin.com/in/tanmaykhambhadiya/", label: "Tanmay Khambhadiya on LinkedIn", icon: LinkedInIcon },
 ];
+const quickLinks = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#campaigns", label: "Campaigns" },
+  { href: "/#for-clippers", label: "For clippers" },
+  { href: "/#faq", label: "FAQ" },
+];
 
 export function Footer() {
   return (
@@ -26,6 +32,22 @@ export function Footer() {
               {SITE_DOMAIN}
             </a>
           </p>
+          <nav aria-label="Footer" className="mt-6">
+            <ul className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-xs uppercase tracking-[0.14em] text-muted-dark">
+              {quickLinks.map((l) => (
+                <li key={l.href}>
+                  <a href={l.href} className="hover:text-lime">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+              <li>
+                <Link href="/login" className="text-lime hover:underline">
+                  Clipper login
+                </Link>
+              </li>
+            </ul>
+          </nav>
           <ul className="mt-6 flex gap-3">
             {socials.map(({ href, label, icon: Icon }) => (
               <li key={label}>
@@ -50,6 +72,7 @@ export function Footer() {
         <div className="container-site flex flex-wrap items-center justify-between gap-3 py-6 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-dark/80">
           <span>© 2026 ClipCrew</span>
           <nav aria-label="Legal" className="flex gap-5">
+            <Link href="/login" className="hover:text-lime">Clipper login</Link>
             <Link href="/privacy" className="hover:text-lime">Privacy</Link>
             <Link href="/terms" className="hover:text-lime">Terms</Link>
           </nav>
