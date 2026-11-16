@@ -9,6 +9,12 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reset_password"), password: z.string().min(8).max(100).optional() }),
   z.object({ action: z.literal("terminate"), reason: z.string().trim().min(1, "Give a reason").max(300) }),
   z.object({ action: z.literal("reactivate") }),
+  z.object({
+    action: z.literal("update_profile"),
+    fullName: z.string().trim().min(1, "Enter a name").max(80),
+    phone: z.string().trim().max(20).optional().nullable(),
+    upiId: z.string().trim().max(80).optional().nullable(),
+  }),
   z.object({ action: z.literal("set_permissions"), permissions: z.array(z.enum(PERMISSION_KEYS as [string, ...string[]])) }),
 ]);
 
@@ -71,6 +77,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         .eq("id", target.id);
       if (error) return NextResponse.json({ ok: false, error: "Couldn't reactivate the user." }, { status: 500 });
       await audit(me.id, "USER_REACTIVATED", "profile", target.id, { status: target.status }, { status: "active" });
+      return NextResponse.json({ ok: true });
+    }
+    case "update_profile": {
+      // clippers: anyone with users.create; staff: super admin only
+      const allowed = target.role === "clipper" ? can(me, "users.create") : isSuper;
+      if (!allowed) return forbidden();
+      const next = { full_name: body.fullName, phone: body.phone || null, upi_id: body.upiId || null };
+      const { data: before } = await supabase.from("profiles").select("full_name, phone, upi_id").eq("id", target.id).maybeSingle();
+      const { error } = await supabase.from("profiles").update(next).eq("id", target.id);
+      if (error) return NextResponse.json({ ok: false, error: "Couldn't save the details." }, { status: 500 });
+      await audit(me.id, "PROFILE_UPDATED", "profile", target.id, before, next);
       return NextResponse.json({ ok: true });
     }
     case "set_permissions": {

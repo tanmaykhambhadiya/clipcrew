@@ -211,6 +211,74 @@ try {
   check("CSV export has the views row", csv.status === 200 && csvText.includes("e2e_test_acc1") && csvText.includes("1240000"), csvText.split("\n")[1]);
   check("activity log loads", (await su.req("/api/admin/activity")).ok);
 
+  // ───────────── clip URL submissions ─────────────
+  const sub = (sess, body) => sess.req("/api/portal/submissions", { method: "POST", json: body });
+  const sb1 = await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.instagram.com/reel/E2EReelAAA/?igsh=abc", note: "first clip" });
+  check("clipper submits a valid reel link", sb1.ok, sb1.error);
+  const dup = await sub(cl1, { campaignId: CID, accountId: A1, url: "https://instagram.com/p/E2EReelAAA" });
+  check("same reel written differently is a duplicate (409)", dup.status === 409, dup.error);
+  check("a YouTube link for an Instagram account is rejected", !(await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.youtube.com/shorts/abcdefghijk" })).ok);
+  check("an Instagram profile link (not a reel) is rejected", !(await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.instagram.com/someone/" })).ok);
+  check("a non-web link is rejected", !(await sub(cl1, { campaignId: CID, accountId: A1, url: "javascript:alert(1)" })).ok);
+  check("clipper can't submit with someone else's account", !(await sub(cl1, { campaignId: CID, accountId: A2, url: "https://www.instagram.com/reel/E2EReelBBB/" })).ok);
+  check("clipper outside the campaign can't submit", !(await sub(cl2, { campaignId: CID, accountId: A2, url: "https://www.instagram.com/reel/E2EReelCCC/" })).ok);
+  const sb2 = await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.instagram.com/reel/E2EReelDDD/" });
+  const sb3 = await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.instagram.com/reel/E2EReelEEE/" });
+  const mySubs = await cl1.req("/api/portal/submissions");
+  check("clipper sees their submissions + form options", mySubs.ok && mySubs.submissions.length === 3 && mySubs.options?.[0]?.id === CID && mySubs.options[0].accounts.some((a) => a.id === A1), JSON.stringify(mySubs).slice(0, 160));
+  check("clipper 2 sees none of them", (await cl2.req("/api/portal/submissions")).submissions?.length === 0);
+  check("staff without submissions.review can't open the queue", (await st2.req("/api/admin/submissions")).status === 403);
+  const queue1 = await su.req("/api/admin/submissions?status=pending");
+  check("super sees the pending queue with names", queue1.ok && queue1.rows.length === 3 && queue1.rows[0].clipper_name === "E2E Clipper One" && queue1.counts.pending === 3, JSON.stringify(queue1.counts));
+  check("search by handle works", (await su.req("/api/admin/submissions?status=all&q=e2e_test_acc1")).rows?.length === 3);
+  check("approve a submission", (await su.req(`/api/admin/submissions/${sb1.submission.id}`, { method: "PATCH", json: { action: "approve" } })).ok);
+  check("approving twice is refused", !(await su.req(`/api/admin/submissions/${sb1.submission.id}`, { method: "PATCH", json: { action: "approve" } })).ok);
+  check("reject needs a reason", !(await su.req(`/api/admin/submissions/${sb2.submission.id}`, { method: "PATCH", json: { action: "reject", reason: "" } })).ok);
+  const rj = await su.req(`/api/admin/submissions/${sb2.submission.id}`, { method: "PATCH", json: { action: "reject", reason: "Wrong audio used.", fine: 100 } });
+  check("reject with a ₹100 fine", rj.ok, rj.error);
+  const fineRow = await one("select amount_paise from fines where reel_ref like '%E2EReelDDD%'");
+  check("the fine was recorded (₹100 = 10000 paise)", fineRow?.amount_paise === 10000, JSON.stringify(fineRow));
+  const inboxRj = await cl1.req("/api/portal/notifications");
+  check("clipper is notified with the reel link and reason", inboxRj.items?.some((n) => n.kind === "reel_rejected" && n.reelRef?.includes("E2EReelDDD") && (n.body ?? "").includes("Wrong audio used.") && (n.body ?? "").includes("₹100")), "");
+  const bulk = await su.req("/api/admin/submissions/bulk", { method: "POST", json: { action: "approve", ids: [sb3.submission.id] } });
+  check("bulk approve", bulk.ok && bulk.approved === 1, JSON.stringify(bulk));
+  const sb4 = await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.instagram.com/reel/E2EReelFFF/" });
+  check("clipper withdraws a pending submission", (await cl1.req(`/api/portal/submissions/${sb4.submission.id}`, { method: "DELETE" })).ok);
+  check("clipper can't withdraw a reviewed one", !(await cl1.req(`/api/portal/submissions/${sb1.submission.id}`, { method: "DELETE" })).ok);
+  const navc = await su.req("/api/admin/nav-counts");
+  check("menu counts endpoint works", navc.ok && typeof navc.pendingSubmissions === "number" && typeof navc.pendingAccounts === "number", JSON.stringify(navc));
+  check("super can grant the new submissions.review permission", (await su.req(`/api/admin/users/${s1.user.id}`, { method: "PATCH", json: { action: "set_permissions", permissions: ["views.enter", "rejections.send", "fines.create", "submissions.review"] } })).ok);
+  const qStaff = await st1.req("/api/admin/submissions?status=all");
+  check("staff assigned to the campaign can now review its submissions", qStaff.ok && qStaff.rows.length === 3, qStaff.error);
+
+  // ───────────── notices centre ─────────────
+  const notice = (sess, body) => sess.req("/api/admin/notices", { method: "POST", json: body });
+  check("staff without campaigns.manage can't send notices", (await notice(st2, { audience: { type: "everyone" }, title: "Hi", body: "Hello there" })).status === 403);
+  const n1 = await notice(su, { audience: { type: "campaigns", campaignIds: [CID] }, title: "Brief update", body: "New rules for this week.", link: "https://example.com/brief" });
+  check("send a notice to a campaign", n1.ok && n1.recipients === 1, JSON.stringify(n1));
+  const hist1 = await su.req("/api/admin/notices");
+  const h1 = hist1.notices?.find((n) => n.batch_id === n1.batchId);
+  check("history shows recipients, read count and audience", h1 && h1.recipients === 1 && h1.read_count === 0 && h1.audience === "E2E Test Campaign", JSON.stringify(h1));
+  await cl1.req("/api/portal/notifications", { method: "POST", json: { all: true } });
+  const h2 = (await su.req("/api/admin/notices")).notices?.find((n) => n.batch_id === n1.batchId);
+  check("read count goes up once the clipper reads it", h2?.read_count === 1, JSON.stringify(h2));
+  const n2 = await notice(su, { audience: { type: "clippers", clipperIds: [c1.user.id, c2.user.id] }, title: "Hello two", body: "Direct message." });
+  check("send to chosen clippers", n2.ok && n2.recipients === 2, JSON.stringify(n2));
+  const n3 = await notice(su, { audience: { type: "everyone" }, title: "To all", body: "Everyone gets this." });
+  const activeClippers = (await one("select count(*)::int n from profiles where role = 'clipper' and status = 'active'")).n;
+  check("super admin can send to everyone", n3.ok && n3.recipients === activeClippers, `${n3.recipients}/${activeClippers}`);
+  check("a bad link is rejected", !(await notice(su, { audience: { type: "everyone" }, title: "Bad", body: "link test", link: "javascript:alert(1)" })).ok);
+
+  // ───────────── clipper overview (admin) ─────────────
+  const list = await su.req("/api/pages/admin/clippers?q=e2e-c1");
+  const row1 = list.clippers?.find((c) => c.login_id === "e2e-c1");
+  check("clippers list shows summaries (accounts, campaigns, balance)", row1 && row1.accounts_verified === 1 && row1.campaigns === 1 && typeof row1.balance_paise === "number", JSON.stringify(row1));
+  const one360 = await su.req(`/api/pages/admin/clippers/${c1.user.id}`);
+  check("clipper 360 returns accounts, campaigns, submissions, earnings, fines, payouts", one360.ok && one360.accounts.length === 1 && one360.campaigns.length === 1 && one360.submissions.length === 3 && one360.weekly.length === 1 && one360.weekly[0].amount_paise === 620000 && one360.payouts.length === 1 && one360.fines.length === 2, JSON.stringify([one360.accounts?.length, one360.campaigns?.length, one360.submissions?.length, one360.weekly?.length, one360.payouts?.length, one360.fines?.length]));
+  check("staff outside the clipper's campaigns can't open the profile", (await st2.req(`/api/pages/admin/clippers/${c1.user.id}`)).status === 403);
+  check("staff with users.create can edit a clipper's details", (await st2.req(`/api/admin/users/${c1.user.id}`, { method: "PATCH", json: { action: "update_profile", fullName: "E2E Clipper One", phone: "+91 90000 11111", upiId: "e2e@okaxis" } })).ok);
+  check("details were saved", (await one("select phone, upi_id from profiles where id = $1", [c1.user.id]))?.upi_id === "e2e@okaxis");
+
   // ───────────── frontend pages (only when FRONTEND_URL is set) ─────────────
   if (FRONTEND_URL) {
     const bad = (t) => /Application error|Internal Server Error|Unhandled Runtime Error|Digest:/i.test(t);
@@ -294,7 +362,7 @@ try {
   await pgc.query("delete from campaigns where name = 'E2E Test Campaign'");
   if (ids.length) {
     await pgc.query("delete from audit_log where actor_id = any($1) or entity_id = any($1)", [ids]);
-    for (const t of ["notifications", "fines", "payouts", "social_accounts"]) await pgc.query(`delete from ${t} where clipper_id = any($1)`, [ids]);
+    for (const t of ["submissions", "notifications", "fines", "payouts", "social_accounts"]) await pgc.query(`delete from ${t} where clipper_id = any($1)`, [ids]);
     await pgc.query("delete from profiles where id = any($1)", [ids]);
   }
   await pgc.query("delete from waitlist where email like 'e2e-%'");

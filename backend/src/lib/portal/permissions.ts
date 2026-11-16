@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   { key: "payouts.manage", label: "Record payouts" },
   { key: "audit.view", label: "See the activity log" },
   { key: "export.data", label: "Export CSV" },
+  { key: "submissions.review", label: "Review clip submissions" },
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number]["key"];
