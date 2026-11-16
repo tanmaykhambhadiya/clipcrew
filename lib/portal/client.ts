@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/apiUrl";
+
 // Browser-side fetch helper for /api/admin/* and /api/portal/* routes.
 // Throws an Error carrying `.fields` (per-field messages) when the route answers { ok: false }.
 
@@ -5,8 +7,9 @@ export type ApiError = Error & { fields?: Record<string, string>; status?: numbe
 
 export async function api<T = Record<string, unknown>>(url: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init ?? {};
-  const res = await fetch(url, {
+  const res = await fetch(url.startsWith("/") ? apiUrl(url) : url, {
     ...rest,
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...(rest.headers ?? {}) },
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });

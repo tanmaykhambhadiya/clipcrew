@@ -21,12 +21,23 @@ import * as r18 from "./routes/api/admin/views/route";
 import * as r19 from "./routes/api/auth/login/route";
 import * as r20 from "./routes/api/auth/logout/route";
 import * as r21 from "./routes/api/contact/route";
-import * as r22 from "./routes/api/portal/accounts/[id]/route";
-import * as r23 from "./routes/api/portal/accounts/route";
-import * as r24 from "./routes/api/portal/campaigns/[id]/accounts/route";
-import * as r25 from "./routes/api/portal/campaigns/route";
-import * as r26 from "./routes/api/portal/notifications/route";
-import * as r27 from "./routes/api/waitlist/route";
+import * as r22 from "./routes/api/me/route";
+import * as r23 from "./routes/api/pages/admin/activity/route";
+import * as r24 from "./routes/api/pages/admin/campaigns/[id]/route";
+import * as r25 from "./routes/api/pages/admin/campaigns/route";
+import * as r26 from "./routes/api/pages/admin/overview/route";
+import * as r27 from "./routes/api/pages/admin/payouts/route";
+import * as r28 from "./routes/api/pages/admin/rejections/route";
+import * as r29 from "./routes/api/pages/admin/views/route";
+import * as r30 from "./routes/api/pages/portal/campaigns/route";
+import * as r31 from "./routes/api/pages/portal/earnings/route";
+import * as r32 from "./routes/api/pages/portal/wallet/route";
+import * as r33 from "./routes/api/portal/accounts/[id]/route";
+import * as r34 from "./routes/api/portal/accounts/route";
+import * as r35 from "./routes/api/portal/campaigns/[id]/accounts/route";
+import * as r36 from "./routes/api/portal/campaigns/route";
+import * as r37 from "./routes/api/portal/notifications/route";
+import * as r38 from "./routes/api/waitlist/route";
 
 export type RouteModule = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", (req: Request, ctx: { params: Record<string, string> }) => Promise<Response> | Response>>;
 
@@ -53,10 +64,21 @@ export const routes: Array<{ url: string; module: RouteModule }> = [
   { url: "/api/auth/login", module: r19 as RouteModule },
   { url: "/api/auth/logout", module: r20 as RouteModule },
   { url: "/api/contact", module: r21 as RouteModule },
-  { url: "/api/portal/accounts/:id", module: r22 as RouteModule },
-  { url: "/api/portal/accounts", module: r23 as RouteModule },
-  { url: "/api/portal/campaigns/:id/accounts", module: r24 as RouteModule },
-  { url: "/api/portal/campaigns", module: r25 as RouteModule },
-  { url: "/api/portal/notifications", module: r26 as RouteModule },
-  { url: "/api/waitlist", module: r27 as RouteModule },
+  { url: "/api/me", module: r22 as RouteModule },
+  { url: "/api/pages/admin/activity", module: r23 as RouteModule },
+  { url: "/api/pages/admin/campaigns/:id", module: r24 as RouteModule },
+  { url: "/api/pages/admin/campaigns", module: r25 as RouteModule },
+  { url: "/api/pages/admin/overview", module: r26 as RouteModule },
+  { url: "/api/pages/admin/payouts", module: r27 as RouteModule },
+  { url: "/api/pages/admin/rejections", module: r28 as RouteModule },
+  { url: "/api/pages/admin/views", module: r29 as RouteModule },
+  { url: "/api/pages/portal/campaigns", module: r30 as RouteModule },
+  { url: "/api/pages/portal/earnings", module: r31 as RouteModule },
+  { url: "/api/pages/portal/wallet", module: r32 as RouteModule },
+  { url: "/api/portal/accounts/:id", module: r33 as RouteModule },
+  { url: "/api/portal/accounts", module: r34 as RouteModule },
+  { url: "/api/portal/campaigns/:id/accounts", module: r35 as RouteModule },
+  { url: "/api/portal/campaigns", module: r36 as RouteModule },
+  { url: "/api/portal/notifications", module: r37 as RouteModule },
+  { url: "/api/waitlist", module: r38 as RouteModule },
 ];

@@ -3,6 +3,7 @@
 import { Check, Copy, Download, LoaderCircle, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { ErrorNote, field, smallBtn } from "@/components/portal/ui";
+import { apiUrl } from "@/lib/apiUrl";
 
 export const PORTAL_LOGIN_URL = "https://clipcrew.ignitralabs.com/login";
 
@@ -63,7 +64,7 @@ export function ExportsCard({ campaigns }: { campaigns: Array<{ id: string; name
     try {
       const qs = new URLSearchParams({ type });
       if (campaignId) qs.set("campaignId", campaignId);
-      const res = await fetch(`/api/admin/export?${qs}`);
+      const res = await fetch(apiUrl(`/api/admin/export?${qs}`), { credentials: "include" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Couldn't download that export.");

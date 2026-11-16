@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PERMISSIONS, type Permission } from "@/lib/portal/permissions";
 import { Button } from "@/components/ui/Button";
+import { apiUrl } from "@/lib/apiUrl";
 
 type User = {
   id: string;
@@ -22,7 +23,7 @@ const field =
   "w-full rounded-xl border border-line bg-ink px-3.5 py-2.5 text-sm text-cream placeholder:text-muted-dark/50 focus:border-lime focus:outline-none focus:ring-2 focus:ring-lime/40";
 
 async function api(url: string, init?: RequestInit) {
-  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+  const res = await fetch(apiUrl(url), { credentials: "include", headers: { "Content-Type": "application/json" }, ...init });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) throw Object.assign(new Error(data.error || "Something went wrong."), { fields: data.fields });
   return data;

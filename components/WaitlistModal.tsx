@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import type { Role } from "@/lib/roles";
 import { AUDIENCE_SIZES, CLIPPING_EXPERIENCE, firstErrors, waitlistSchema } from "@/lib/validation";
 import { Button } from "./ui/Button";
+import { apiUrl } from "@/lib/apiUrl";
 
 const roleOptions: { value: Role; emoji: string; label: string }[] = [
   { value: "creator", emoji: "🎙", label: "Creator / Podcaster" },
@@ -99,7 +100,8 @@ export function WaitlistModal({ initialRole, source, onClose }: Props) {
     setServerError("");
     setSubmitting(true);
     try {
-      const res = await fetch("/api/waitlist", {
+      const res = await fetch(apiUrl("/api/waitlist"), {
+        credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

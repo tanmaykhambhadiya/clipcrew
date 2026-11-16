@@ -3,6 +3,7 @@
 import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { apiUrl } from "@/lib/apiUrl";
 
 const field =
   "w-full rounded-xl border border-line bg-ink px-4 py-3 text-[15px] text-cream placeholder:text-muted-dark/50 focus:border-lime focus:outline-none focus:ring-2 focus:ring-lime/40";
@@ -18,7 +19,8 @@ export function LoginForm() {
     setError("");
     setBusy(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(apiUrl("/api/auth/login"), {
+        credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ loginId, password }),

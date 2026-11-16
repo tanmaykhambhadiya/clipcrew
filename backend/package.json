@@ -11,7 +11,8 @@
     "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node20 --packages=external --sourcemap --outfile=dist/server.mjs",
     "start": "node dist/server.mjs",
     "pretypecheck": "npm run gen",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "node db/migrate.mjs"
   },
   "engines": {
     "node": ">=20"

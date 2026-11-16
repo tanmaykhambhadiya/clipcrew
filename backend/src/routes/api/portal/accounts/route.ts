@@ -11,17 +11,36 @@ const createSchema = z.object({
   handle: z.string().trim().min(1, "Enter your username or profile link.").max(300),
 });
 
-// GET /api/portal/accounts — the signed-in clipper's own accounts.
+// GET /api/portal/accounts — the signed-in clipper's own accounts, with the latest rejection reason on rejected ones.
 export async function GET() {
   const g = await guard({ clipper: true });
   if ("error" in g) return g.error;
-  const { data, error } = await getSupabaseAdmin()
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
     .from("social_accounts")
     .select("id, platform, username, verify_code, status, verified_at, created_at")
     .eq("clipper_id", g.me.id)
     .order("created_at", { ascending: false });
   if (error) return fail(500, "Couldn't load your accounts.");
-  return ok({ accounts: data });
+  const accounts = data ?? [];
+
+  // The reason a rejected account was turned down lives in the audit trail.
+  const rejectedIds = accounts.filter((a: any) => a.status === "rejected").map((a: any) => a.id);
+  const reasons: Record<string, string> = {};
+  if (rejectedIds.length) {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("entity_id, action, after, created_at")
+      .eq("entity", "social_account")
+      .in("entity_id", rejectedIds)
+      .in("action", ["ACCOUNT_REJECTED", "ACCOUNT_REVOKED"])
+      .order("created_at", { ascending: false });
+    for (const l of logs ?? []) {
+      const reason = (l.after as { reason?: string } | null)?.reason;
+      if (l.entity_id && reason && !reasons[l.entity_id]) reasons[l.entity_id] = reason;
+    }
+  }
+  return ok({ accounts: accounts.map((a: any) => ({ ...a, reason: reasons[a.id] ?? null })) });
 }
 
 // POST /api/portal/accounts — add an account. It waits for staff to type and send a verification code

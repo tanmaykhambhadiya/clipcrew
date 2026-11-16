@@ -16,14 +16,12 @@ import {
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { getSupabaseAdmin } from "@/lib/supabase";
-import { staffCampaignIds } from "@/lib/portal/guard";
-import { can, getMe, type Me } from "@/lib/portal/session";
+import { pageApi } from "@/lib/server-api";
+import { can, getMe } from "@/lib/portal/session";
 import { compactViews, formatINR, formatViews } from "@/lib/portal/money";
-import { addDays, currentWeekStart, formatWeek } from "@/lib/portal/weeks";
+import { formatWeek } from "@/lib/portal/weeks";
 import { Card, EmptyState, Label, Pill } from "@/components/portal/ui";
-import { balanceOf, clipperIdsForCampaigns, fetchAll, fetchBalances, fetchByIds } from "@/app/api/admin/export/data";
-import { loadActivity, type ActivityEntry } from "@/app/api/admin/activity/load";
+import type { ActivityEntry } from "@/lib/portal/types";
 import { actionLabel, actionTone } from "./activity/labels";
 import { ExportsCard, SharePortal } from "./settings/ShareCards";
 
@@ -31,91 +29,17 @@ export const dynamic = "force-dynamic";
 
 type Tile = { label: string; value: string; sub?: string; href?: string; icon: LucideIcon; accent?: boolean };
 
-/** Runs a stat loader; a failure shows "—" instead of breaking the whole dashboard. */
-async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await fn();
-  } catch (e) {
-    console.error("[admin overview]", e);
-    return fallback;
-  }
-}
-
-async function loadStats(me: Me) {
-  const db = getSupabaseAdmin();
-  const scope = await staffCampaignIds(me); // null = all campaigns
-  const none = scope !== null && scope.length === 0;
-  const lastWeek = addDays(currentWeekStart(), -7);
-
-  // Independent loads run together — each database round trip is slow from the app server.
-  const [campaigns, clipperIds] = await Promise.all([
-    safe(async () => {
-      if (none) return [] as Array<{ id: string; name: string; status: string }>;
-      let q = db.from("campaigns").select("id, name, status").order("created_at", { ascending: false });
-      if (scope) q = q.in("id", scope);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as Array<{ id: string; name: string; status: string }>;
-    }, null),
-    safe(() => clipperIdsForCampaigns(scope), [] as string[] | null),
-  ]);
-
-  const [activeClippers, pending, week, unpaid, fines] = await Promise.all([
-    safe(async () => {
-      if (clipperIds === null) {
-        const { count, error } = await db.from("profiles").select("id", { count: "exact", head: true }).eq("role", "clipper").eq("status", "active");
-        if (error) throw error;
-        return count ?? 0;
-      }
-      const people = await fetchByIds<{ status: string; role: string }>("profiles", "id, status, role", clipperIds);
-      return people.filter((p) => p.role === "clipper" && p.status === "active").length;
-    }, null as number | null),
-
-    can(me, "accounts.verify")
-      ? safe(async () => {
-          const { count, error } = await db.from("social_accounts").select("id", { count: "exact", head: true }).eq("status", "pending");
-          if (error) throw error;
-          return count ?? 0;
-        }, null as number | null)
-      : Promise.resolve(undefined),
-
-    safe(async () => {
-      if (none) return { views: 0, amount: 0, rows: 0 };
-      const rows = await fetchAll<{ views: number; amount_paise: number }>((from, to) => {
-        let q = db.from("weekly_views").select("views, amount_paise").eq("week_start", lastWeek);
-        if (scope) q = q.in("campaign_id", scope);
-        return q.range(from, to);
-      });
-      return {
-        views: rows.reduce((s, r) => s + Number(r.views), 0),
-        amount: rows.reduce((s, r) => s + Number(r.amount_paise), 0),
-        rows: rows.length,
-      };
-    }, null as { views: number; amount: number; rows: number } | null),
-
-    can(me, "payouts.manage")
-      ? safe(async () => {
-          const balances = await fetchBalances(clipperIds);
-          const owed = balances.map(balanceOf).filter((b) => b > 0);
-          return { total: owed.reduce((s, b) => s + b, 0), clippers: owed.length };
-        }, null as { total: number; clippers: number } | null)
-      : Promise.resolve(undefined),
-
-    can(me, "fines.create") || can(me, "payouts.manage") || can(me, "rejections.send")
-      ? safe(async () => {
-          if (none) return { total: 0, count: 0 };
-          const rows = await fetchAll<{ amount_paise: number }>((from, to) => {
-            let q = db.from("fines").select("amount_paise").is("waived_at", null);
-            if (scope) q = q.in("campaign_id", scope);
-            return q.range(from, to);
-          });
-          return { total: rows.reduce((s, r) => s + Number(r.amount_paise), 0), count: rows.length };
-        }, null as { total: number; count: number } | null)
-      : Promise.resolve(undefined),
-  ]);
-
-  return { campaigns, activeClippers, pending, week, unpaid, fines, lastWeek, isScoped: scope !== null };
-}
+type Overview = {
+  campaigns: { id: string; name: string; status: string }[] | null;
+  activeClippers: number | null;
+  pending?: number | null;
+  week: { views: number; amount: number; rows: number } | null;
+  unpaid?: { total: number; clippers: number } | null;
+  fines?: { total: number; count: number } | null;
+  lastWeek: string;
+  isScoped: boolean;
+  recent: ActivityEntry[] | null;
+};
 
 function StatTile({ t }: { t: Tile }) {
   const Icon = t.icon;
@@ -148,11 +72,7 @@ function when(iso: string) {
 
 export default async function AdminHome() {
   const me = (await getMe())!; // the layout already redirects signed-out users and clippers
-  // Start the activity feed alongside the stats instead of after them.
-  const recentPromise = can(me, "audit.view")
-    ? safe(async () => (await loadActivity({ limit: 10 })).entries, null as ActivityEntry[] | null)
-    : Promise.resolve(null as ActivityEntry[] | null);
-  const s = await loadStats(me);
+  const s = await pageApi<Overview>("/api/pages/admin/overview");
   const dash = "—";
 
   const activeCampaigns = s.campaigns?.filter((c) => c.status === "active").length;
@@ -215,7 +135,7 @@ export default async function AdminHome() {
     { href: "/admin/users", label: "Add user", icon: UserPlus, show: can(me, "users.create") },
   ].filter((a) => a.show);
 
-  const recent = await recentPromise;
+  const recent = s.recent;
 
   return (
     <div className="space-y-10">

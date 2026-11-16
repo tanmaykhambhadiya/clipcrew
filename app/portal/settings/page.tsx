@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { pageApi } from "@/lib/server-api";
 import { getMe } from "@/lib/portal/session";
 import { Card, Label, PageTitle } from "@/components/portal/ui";
 import { PasswordForm } from "@/app/admin/settings/PasswordForm";
@@ -12,7 +12,7 @@ export default async function PortalSettingsPage() {
   if (!me) redirect("/login");
   if (me.role !== "clipper") redirect("/admin/settings");
 
-  const { data: profile } = await getSupabaseAdmin().from("profiles").select("upi_id, phone").eq("id", me.id).maybeSingle();
+  const profile = await pageApi<{ upiId: string; phone: string }>("/api/account/profile", { forbiddenTo: "/login" });
 
   return (
     <div className="space-y-8">
@@ -38,7 +38,7 @@ export default async function PortalSettingsPage() {
           <Card>
             <Label>Payout details</Label>
             <p className="mb-6 mt-2 text-sm text-muted-dark">Where we send your money and how we reach you.</p>
-            <ProfileForm upiId={profile?.upi_id ?? ""} phone={profile?.phone ?? ""} />
+            <ProfileForm upiId={profile.upiId} phone={profile.phone} />
           </Card>
         </div>
 

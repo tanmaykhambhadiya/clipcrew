@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { pageApi } from "@/lib/server-api";
 import { can, getMe } from "@/lib/portal/session";
 import { PageTitle } from "@/components/portal/ui";
-import { loadActivity } from "@/app/api/admin/activity/load";
+import type { ActivityEntry } from "@/lib/portal/types";
 import { ActivityLog } from "./ActivityLog";
 import { ACTION_LABELS } from "./labels";
 
@@ -12,19 +12,10 @@ export default async function ActivityPage() {
   const me = await getMe();
   if (!me || !can(me, "audit.view")) redirect("/admin");
 
-  let initial: Awaited<ReturnType<typeof loadActivity>> | null = null;
-  try {
-    initial = await loadActivity({});
-  } catch (e) {
-    console.error("[activity] page load failed", e);
-  }
-
-  const { data: people } = await getSupabaseAdmin()
-    .from("profiles")
-    .select("id, full_name, login_id, role")
-    .order("role")
-    .order("full_name")
-    .limit(2000);
+  const { initial, people } = await pageApi<{
+    initial: { entries: ActivityEntry[]; hasMore: boolean; nextOffset: number } | null;
+    people: { id: string; full_name: string; login_id: string; role: string }[];
+  }>("/api/pages/admin/activity");
 
   const actions = Array.from(new Set([...Object.keys(ACTION_LABELS), ...(initial?.entries.map((e) => e.action) ?? [])])).sort();
 

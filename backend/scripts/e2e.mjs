@@ -6,6 +6,7 @@ import pg from "pg";
 
 const BASE = process.env.BASE || "http://localhost:4100";
 const ORIGIN = process.env.FRONTEND_ORIGIN?.split(",")[0] || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || ""; // set to also test the pages through the frontend
 const SUPER = { loginId: process.env.SUPER_LOGIN, password: process.env.SUPER_PW };
 if (!process.env.DATABASE_URL || !SUPER.loginId || !SUPER.password) {
   console.error("Set DATABASE_URL, SUPER_LOGIN and SUPER_PW.");
@@ -51,6 +52,11 @@ class Session {
     if (raw) return res;
     const body = await res.json().catch(() => ({}));
     return { status: res.status, ...body };
+  }
+  /** Fetch a page from the frontend as this session (no redirects followed). */
+  async web(path) {
+    const res = await fetch(FRONTEND_URL + path, { redirect: "manual", headers: { cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ") } });
+    return { status: res.status, location: res.headers.get("location") || "", text: await res.text() };
   }
   login(loginId, password) {
     return this.req("/api/auth/login", { method: "POST", json: { loginId, password } });
@@ -204,6 +210,54 @@ try {
   const csvText = await csv.text();
   check("CSV export has the views row", csv.status === 200 && csvText.includes("e2e_test_acc1") && csvText.includes("1240000"), csvText.split("\n")[1]);
   check("activity log loads", (await su.req("/api/admin/activity")).ok);
+
+  // ───────────── frontend pages (only when FRONTEND_URL is set) ─────────────
+  if (FRONTEND_URL) {
+    const bad = (t) => /Application error|Internal Server Error|Unhandled Runtime Error|Digest:/i.test(t);
+    const page = async (sess, label, path, mustHave = []) => {
+      const r = await sess.web(path);
+      const missing = mustHave.filter((m) => !r.text.includes(m));
+      check(`${label} ${path}`, r.status === 200 && !bad(r.text) && !missing.length, r.status !== 200 ? `status ${r.status} ${r.location}` : missing.length ? `missing: ${missing.join(", ")}` : "");
+    };
+    const wk = `campaign=${CID}&week=${prevWeek}`;
+    await page(su, "super", "/admin", ["Welcome back"]);
+    await page(su, "super", "/admin/campaigns", ["E2E Test Campaign"]);
+    await page(su, "super", "/admin/campaigns/new");
+    await page(su, "super", `/admin/campaigns/${CID}`, ["E2E Clipper One", "e2e_test_acc1"]);
+    await page(su, "super", `/admin/views?${wk}`, ["e2e_test_acc1"]);
+    await page(su, "super", "/admin/accounts?status=all", ["e2e_test_acc1"]);
+    await page(su, "super", "/admin/rejections");
+    await page(su, "super", "/admin/payouts", ["E2E Clipper One", "UPI-E2E-1"]);
+    await page(su, "super", "/admin/users"); // the table itself loads in the browser (covered by the API checks)
+    await page(su, "super", "/admin/activity");
+    await page(su, "super", "/admin/settings");
+    await page(st1, "staff", "/admin", ["Welcome back"]);
+    await page(st1, "staff", "/admin/campaigns", ["E2E Test Campaign"]);
+    await page(st1, "staff", `/admin/campaigns/${CID}`);
+    await page(st1, "staff", `/admin/views?${wk}`, ["e2e_test_acc1"]);
+    await page(st1, "staff", "/admin/rejections");
+    await page(st1, "staff", "/admin/settings");
+    await page(cl1, "clipper", "/portal", ["3,200"]);
+    await page(cl1, "clipper", `/portal?c=${CID}&r=all`, ["E2E Test Campaign"]);
+    await page(cl1, "clipper", "/portal/campaigns", ["E2E Test Campaign"]);
+    await page(cl1, "clipper", "/portal/accounts", ["e2e_test_acc1"]);
+    await page(cl1, "clipper", "/portal/wallet", ["UPI-E2E-1"]);
+    await page(cl1, "clipper", "/portal/inbox");
+    await page(cl1, "clipper", "/portal/settings");
+    await page(new Session(), "public", "/", ["ClipCrew"]);
+    await page(new Session(), "public", "/login");
+    const redir = async (sess, path, expect) => {
+      const r = await sess.web(path);
+      check(`redirect ${path} → ${expect}`, r.status >= 300 && r.status < 400 && r.location.includes(expect), `${r.status} ${r.location}`);
+    };
+    await redir(new Session(), "/admin", "/login");
+    await redir(new Session(), "/portal/wallet", "/login");
+    await redir(cl2, "/admin", "/portal");
+    await redir(st2, "/admin/payouts", "/admin");
+    await redir(st2, "/portal", "/admin");
+    const loginPage = await su.web("/login");
+    check("signed-in user is sent away from /login", loginPage.status >= 300 && loginPage.status < 400);
+  }
 
   // ───────────── password, terminate, reactivate ─────────────
   const cl3 = new Session();

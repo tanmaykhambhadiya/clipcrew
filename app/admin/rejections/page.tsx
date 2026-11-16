@@ -2,15 +2,16 @@ import { redirect } from "next/navigation";
 import { PageTitle } from "@/components/portal/ui";
 import { can, getMe, isStaff } from "@/lib/portal/session";
 import { NoticesManager } from "./NoticesManager";
-import { canUseNoticesPage, loadFormData } from "./server";
+import { pageApi } from "@/lib/server-api";
+import type { CampaignOpt, ClipperOpt } from "./types";
 
 export const dynamic = "force-dynamic";
 
 export default async function RejectionsPage() {
   const me = await getMe();
-  if (!me || !isStaff(me) || !canUseNoticesPage(me)) redirect("/admin");
+  if (!me || !isStaff(me) || !(can(me, "rejections.send") || can(me, "fines.create") || can(me, "campaigns.manage"))) redirect("/admin");
 
-  const { campaigns, members, clippers } = await loadFormData(me);
+  const { campaigns, members, clippers } = await pageApi<{ campaigns: CampaignOpt[]; members: Record<string, string[]>; clippers: ClipperOpt[] }>("/api/pages/admin/rejections");
 
   return (
     <div className="space-y-10">

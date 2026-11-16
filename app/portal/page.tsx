@@ -9,7 +9,7 @@ import { Card, Label, PageTitle, PLATFORM_LABELS, TableWrap, td, th, tr } from "
 import { EarningsFilters } from "@/components/portal/earnings/EarningsFilters";
 import { ImpactBreakdown, type ImpactRow } from "@/components/portal/earnings/ImpactBreakdown";
 import { TrendBars } from "@/components/portal/earnings/TrendBars";
-import { accountLabel, loadBalance, loadClipperEarnings, type EarningRow } from "@/components/portal/earnings/data";
+import { accountLabel, loadEarnings, type EarningRow } from "@/components/portal/earnings/data";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +23,7 @@ export default async function PortalHome({ searchParams }: { searchParams: { c?:
   if (!me) redirect("/login");
   if (me.role !== "clipper") redirect("/admin");
 
-  const [{ rows, accounts, campaigns, joinedCampaignIds }, balance] = await Promise.all([
-    loadClipperEarnings(me.id),
-    loadBalance(me.id),
-  ]);
+  const { rows, accounts, campaigns, joinedCampaignIds, balance } = await loadEarnings();
 
   const campaignOptions = Array.from(campaigns.values()).sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ id: c.id, name: c.name }));
   const campaign = campaignOptions.some((c) => c.id === searchParams.c) ? (searchParams.c as string) : "";

@@ -3,13 +3,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buttonClass } from "@/components/ui/Button";
 import { EmptyState, ErrorNote, PLATFORM_LABELS, PageTitle, Pill, TableWrap, field, smallBtn, td, th, tr } from "@/components/portal/ui";
-import { staffCampaignIds } from "@/lib/portal/guard";
 import { compactViews, formatINR, formatViews } from "@/lib/portal/money";
 import { can, getMe, isStaff } from "@/lib/portal/session";
 import { formatDate } from "@/lib/portal/weeks";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { pageApi } from "@/lib/server-api";
 import { CAMPAIGN_STATUSES, statusTone } from "./_lib/status";
-import { CAMPAIGN_COLUMNS, fetchAll, fetchIn, weeklyViewsFor, type CampaignRow } from "./_lib/data";
+import type { CampaignRow } from "./_lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -23,51 +22,15 @@ export default async function CampaignsPage({ searchParams }: { searchParams: { 
   const status = STATUSES.includes(searchParams.status as (typeof STATUSES)[number]) ? searchParams.status! : "";
   const q = (searchParams.q ?? "").trim().slice(0, 80);
 
-  const db = getSupabaseAdmin();
-  const scope = await staffCampaignIds(me);
-
-  let campaigns: CampaignRow[] = [];
-  let loadError = "";
-  const totals = new Map<string, { views: number; earned: number; clippers: number }>();
-
-  try {
-    if (scope === null) {
-      campaigns = await fetchAll<CampaignRow>((from, to) =>
-        db.from("campaigns").select(CAMPAIGN_COLUMNS).order("created_at", { ascending: false }).range(from, to),
-      );
-    } else if (scope.length) {
-      campaigns = await fetchIn<CampaignRow>(scope, (chunk, from, to) =>
-        db.from("campaigns").select(CAMPAIGN_COLUMNS).in("id", chunk).order("created_at", { ascending: false }).range(from, to),
-      );
-      campaigns.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    }
-
-    if (status) campaigns = campaigns.filter((c) => c.status === status);
-    if (q) {
-      const needle = q.toLowerCase();
-      campaigns = campaigns.filter((c) => c.name.toLowerCase().includes(needle) || (c.client ?? "").toLowerCase().includes(needle));
-    }
-
-    const ids = campaigns.map((c) => c.id);
-    for (const id of ids) totals.set(id, { views: 0, earned: 0, clippers: 0 });
-    if (ids.length) {
-      const [views, members] = await Promise.all([
-        weeklyViewsFor(ids),
-        fetchIn<{ campaign_id: string }>(ids, (chunk, from, to) =>
-          db.from("campaign_clippers").select("campaign_id").in("campaign_id", chunk).order("campaign_id").order("clipper_id").range(from, to),
-        ),
-      ]);
-      for (const v of views) {
-        const t = totals.get(v.campaign_id)!;
-        t.views += Number(v.views);
-        t.earned += Number(v.amount_paise);
-      }
-      for (const m of members) totals.get(m.campaign_id)!.clippers += 1;
-    }
-  } catch (e) {
-    console.error("[campaigns] list failed", e);
-    loadError = "Couldn't load campaigns. Refresh to try again.";
-  }
+  const qs = new URLSearchParams();
+  if (status) qs.set("status", status);
+  if (q) qs.set("q", q);
+  const data = await pageApi<{ campaigns: CampaignRow[]; totals: Record<string, { views: number; earned: number; clippers: number }>; loadError: string; scoped: boolean }>(
+    `/api/pages/admin/campaigns?${qs}`,
+    { forbiddenTo: "/login" },
+  );
+  const { campaigns, loadError, scoped } = data;
+  const totals = new Map(Object.entries(data.totals));
 
   const filtered = !!(status || q);
   const grand = Array.from(totals.values()).reduce((a, t) => ({ views: a.views + t.views, earned: a.earned + t.earned }), { views: 0, earned: 0 });
@@ -82,7 +45,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: { 
         )}
       </PageTitle>
 
-      {scope !== null && (
+      {scoped && (
         <p className="text-sm text-muted-dark">You see the campaigns the super admin has assigned to you.</p>
       )}
 
@@ -108,7 +71,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: { 
       {!loadError && campaigns.length === 0 ? (
         filtered ? (
           <EmptyState title="Nothing matches.">Try another search or status — or <Link href="/admin/campaigns" className="text-lime underline">clear the filters</Link>.</EmptyState>
-        ) : scope !== null ? (
+        ) : scoped ? (
           <EmptyState title="No campaigns yet.">You haven&apos;t been assigned to any campaigns. Ask the super admin to add you to one.</EmptyState>
         ) : (
           <EmptyState title="No campaigns yet.">

@@ -40,3 +40,11 @@ export async function PATCH(req: Request) {
   await audit(me.id, "PROFILE_UPDATED", "profile", me.id, before, next);
   return ok({ profile: next });
 }
+
+// GET /api/account/profile — the signed-in clipper's UPI ID and phone (for the settings form).
+export async function GET() {
+  const g = await guard({ clipper: true });
+  if ("error" in g) return g.error;
+  const { data } = await getSupabaseAdmin().from("profiles").select("upi_id, phone").eq("id", g.me.id).maybeSingle();
+  return ok({ upiId: data?.upi_id ?? "", phone: data?.phone ?? "" });
+}
