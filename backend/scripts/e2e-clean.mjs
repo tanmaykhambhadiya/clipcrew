@@ -17,6 +17,11 @@ if (ids.length) {
   }
   await c.query("delete from profiles where id = any($1)", [ids]);
 }
+const invIds = (await c.query("select id from invite_links where label like 'E2E invite%'")).rows.map((r) => r.id);
+if (invIds.length) {
+  await c.query("delete from audit_log where entity_id = any($1)", [invIds]);
+  await c.query("delete from invite_links where id = any($1)", [invIds]);
+}
 await c.query("delete from waitlist where email like 'e2e-%'");
 await c.query("delete from contact_messages where email like 'e2e-%'");
 console.log(`cleaned ${ids.length} e2e users`);

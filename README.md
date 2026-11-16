@@ -19,7 +19,10 @@ login cookie. The API checks who you are and what you may do on every request.
 - **Admin (super admin and staff, with per-person permissions):** campaigns (₹ per 1M views, platforms, account limits),
   weekly views with automatic earnings, clip **submission review**, account verification (staff type the code), rejections
   with fines, **notices** to everyone/campaigns/chosen clippers with read counts, a one-screen **clipper profile**,
-  payouts, CSV exports, activity log.
+  payouts, CSV exports, activity log. Rejecting a reel from *Rejections & fines* also rejects its clip submission
+  (and the same reel can't be rejected or submitted twice). **Invite links** (super admin): share one URL and clippers
+  sign themselves up, already in the chosen campaigns. The super admin can **view clipper passwords** that ClipCrew
+  issued (encrypted with `SECRET_KEY`; hidden once the clipper picks their own).
 - **Clipper portal:** earnings dashboard, campaigns, account linking, **reel URL submissions**, wallet, inbox.
 
 ## Run locally
@@ -41,7 +44,7 @@ For local development the API's `FRONTEND_ORIGIN` must be `http://localhost:3000
 - `/?waitlist=creator|promoter|clipper` opens the waitlist with that role pre-selected.
 - Spam protection on public forms: hidden honeypot, 2-second minimum fill time, 5 requests / IP / 10 min.
 - Drop a `public/demo.mp4` to show the demo video in the Automation section (hidden when absent; checked at build time).
-- Tests: `backend/scripts/e2e.mjs` (about 165 checks; API, permissions, and every page through the website). Test database only.
+- Tests: `backend/scripts/e2e.mjs` (about 205 checks; API, permissions, and every page through the website). Test database only.
 
 ## Deploy
 

@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   const { error } = await db
     .from("credentials")
-    .update({ password_hash: await hashPassword(newPassword), updated_at: new Date().toISOString() })
+    .update({ password_hash: await hashPassword(newPassword), visible_password: null, updated_at: new Date().toISOString() })
     .eq("user_id", me.id);
   if (error) {
     console.error("[account/password] update failed", error);

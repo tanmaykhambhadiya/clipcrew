@@ -26,6 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/rejections", label: "Rejections & fines", show: can(me, "rejections.send") || can(me, "fines.create") },
     { href: "/admin/payouts", label: "Payouts", show: can(me, "payouts.manage") },
     { href: "/admin/users", label: "Users", show: can(me, "users.create") },
+    { href: "/admin/invites", label: "Invite links", show: me.role === "super_admin" },
     { href: "/admin/activity", label: "Activity", show: can(me, "audit.view") },
     { href: "/admin/settings", label: "Settings", show: true },
   ]

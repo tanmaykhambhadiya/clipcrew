@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { sql } from "@/db/pool";
 import { fail, guard, ok, parseBody } from "@/lib/portal/guard";
 import { checkReelUrl } from "@/lib/portal/reelUrl";
+import { findPriorRejection, fmtDate } from "@/loaders/reelStatus";
 
 const DAILY_LIMIT = 100;
 
@@ -90,6 +91,13 @@ export async function POST(req: Request) {
 
   const check = checkReelUrl(d.url, eligible[0].platform);
   if (!check.ok) return fail(400, check.error, { url: check.error });
+
+  // Rejected from "Rejections & fines" before it was ever submitted? Then it can't be submitted now.
+  const rejected = await findPriorRejection(me.id, check.key);
+  if (rejected) {
+    const msg = `This reel was rejected on ${fmtDate(rejected.createdAt)} — check your inbox. Rejected reels can't be submitted.`;
+    return fail(409, msg, { url: "Already rejected" });
+  }
 
   const [{ n }] = await sql<{ n: number }>("select count(*)::int as n from submissions where clipper_id = $1 and created_at > now() - interval '24 hours'", [me.id]);
   if (n >= DAILY_LIMIT) return fail(429, `You've reached today's limit of ${DAILY_LIMIT} submissions. Try again tomorrow.`);

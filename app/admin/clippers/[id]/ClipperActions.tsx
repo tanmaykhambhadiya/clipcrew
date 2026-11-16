@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Copy, KeyRound, LoaderCircle, MessageCircle, Pencil, Send, ShieldOff, UserCheck } from "lucide-react";
+import { Check, Copy, Eye, KeyRound, LoaderCircle, MessageCircle, Pencil, Send, ShieldOff, UserCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, type ApiError } from "@/lib/portal/client";
+import { PASSWORD_GONE } from "@/lib/portal/passwordView";
 import { Card, ErrorNote, Label, errorText, field, label, smallBtn } from "@/components/portal/ui";
 
 type Props = {
@@ -13,10 +14,11 @@ type Props = {
   phone: string;
   upiId: string;
   status: "active" | "terminated";
-  can: { terminate: boolean; editProfile: boolean; notices: boolean };
+  can: { terminate: boolean; editProfile: boolean; notices: boolean; viewPassword: boolean };
 };
 
 const PORTAL = "https://clipcrew.ignitralabs.com/login";
+
 
 /** Quick actions on one clipper: edit details, reset password, message, terminate/reactivate. */
 export function ClipperActions({ id, loginId, fullName, phone, upiId, status, can }: Props) {
@@ -25,7 +27,7 @@ export function ClipperActions({ id, loginId, fullName, phone, upiId, status, ca
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
-  const [creds, setCreds] = useState<{ password: string } | null>(null);
+  const [creds, setCreds] = useState<{ password: string; heading: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [done, setDone] = useState("");
   const [form, setForm] = useState({ fullName, phone, upiId });
@@ -67,11 +69,49 @@ export function ClipperActions({ id, loginId, fullName, phone, upiId, status, ca
               if (!window.confirm(`Reset the password for ${loginId}? Their current sessions are signed out.`)) return;
               run("reset", async () => {
                 const r = await api<{ password: string }>(`/api/admin/users/${id}`, { method: "PATCH", json: { action: "reset_password" } });
-                setCreds({ password: r.password });
+                setCreds({ password: r.password, heading: "New password" });
+                setCopied(false);
               });
             }}
           >
             {busy === "reset" ? <LoaderCircle size={13} className="animate-spin" /> : <KeyRound size={13} />} Reset password
+          </button>
+        )}
+        {status === "active" && (
+          <button
+            type="button"
+            className={smallBtn}
+            disabled={busy === "set"}
+            onClick={() => {
+              const pw = window.prompt(`Set a new password for ${loginId} (at least 8 characters). Their current sessions are signed out.`);
+              if (pw === null) return;
+              if (pw.trim().length < 8) return setError("The password needs at least 8 characters.");
+              run("set", async () => {
+                const r = await api<{ password: string }>(`/api/admin/users/${id}`, { method: "PATCH", json: { action: "reset_password", password: pw.trim() } });
+                setCreds({ password: r.password, heading: "Password set" });
+                setCopied(false);
+              });
+            }}
+          >
+            {busy === "set" ? <LoaderCircle size={13} className="animate-spin" /> : <Pencil size={13} />} Set password
+          </button>
+        )}
+        {can.viewPassword && (
+          <button
+            type="button"
+            className={smallBtn}
+            disabled={busy === "view"}
+            onClick={() =>
+              run("view", async () => {
+                const r = await api<{ password: string | null; reason: string | null }>(`/api/admin/users/${id}/password`);
+                if (r.password) {
+                  setCreds({ password: r.password, heading: "Current password" });
+                  setCopied(false);
+                } else setError(PASSWORD_GONE[r.reason ?? ""] ?? PASSWORD_GONE.changed_by_clipper);
+              })
+            }
+          >
+            {busy === "view" ? <LoaderCircle size={13} className="animate-spin" /> : <Eye size={13} />} Show password
           </button>
         )}
         {can.notices && status === "active" && (
@@ -118,7 +158,7 @@ export function ClipperActions({ id, loginId, fullName, phone, upiId, status, ca
 
       {creds && (
         <div className="mt-4 rounded-2xl border border-lime bg-lime/10 p-4">
-          <p className="font-mono text-xs uppercase tracking-[0.16em] text-lime">New password — shown only once</p>
+          <p className="font-mono text-xs uppercase tracking-[0.16em] text-lime">{creds.heading}</p>
           <p className="mt-2 text-sm">Login ID <span className="ml-2 font-mono font-semibold">{loginId}</span></p>
           <p className="mt-1 text-sm">Password <span className="ml-2 font-mono font-semibold">{creds.password}</span></p>
           <div className="mt-3 flex flex-wrap gap-2">

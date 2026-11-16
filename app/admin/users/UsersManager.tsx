@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Copy, KeyRound, LoaderCircle, MessageCircle, Plus, ShieldOff, UserCheck } from "lucide-react";
+import { Check, Copy, Eye, KeyRound, LoaderCircle, MessageCircle, Plus, ShieldOff, UserCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PERMISSIONS, type Permission } from "@/lib/portal/permissions";
 import { Button } from "@/components/ui/Button";
 import { apiUrl } from "@/lib/apiUrl";
+import { PASSWORD_GONE } from "@/lib/portal/passwordView";
 
 type User = {
   id: string;
@@ -30,13 +31,13 @@ async function api(url: string, init?: RequestInit) {
   return data;
 }
 
-function Credentials({ loginId, password, onDone }: { loginId: string; password: string; onDone: () => void }) {
+function Credentials({ loginId, password, current, onDone }: { loginId: string; password: string; current?: boolean; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
   const text = `ClipCrew login\nLogin ID: ${loginId}\nPassword: ${password}`;
   const shareText = `Your ClipCrew login\nLogin: https://clipcrew.ignitralabs.com/login\nLogin ID: ${loginId}\nPassword: ${password}\nChange your password after signing in (Settings).`;
   return (
     <div className="rounded-2xl border border-lime bg-lime/10 p-5">
-      <p className="font-mono text-xs uppercase tracking-[0.16em] text-lime">Share these now — the password is shown only once</p>
+      <p className="font-mono text-xs uppercase tracking-[0.16em] text-lime">{current ? "Current login" : "Share these now"}</p>
       <p className="mt-3 text-sm">Login ID <span className="ml-2 font-mono text-base font-semibold">{loginId}</span></p>
       <p className="mt-1 text-sm">Password <span className="ml-2 font-mono text-base font-semibold">{password}</span></p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -84,7 +85,7 @@ function PermissionChecks({ value, onChange }: { value: Permission[]; onChange: 
 export function UsersManager({ isSuper, meId }: { isSuper: boolean; meId: string }) {
   const [users, setUsers] = useState<User[] | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [creds, setCreds] = useState<{ loginId: string; password: string } | null>(null);
+  const [creds, setCreds] = useState<{ loginId: string; password: string; current?: boolean } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState("");
@@ -269,6 +270,24 @@ export function UsersManager({ isSuper, meId }: { isSuper: boolean; meId: string
                           act(u, { action: "reset_password" }, (d) => d.password && setCreds({ loginId: u.login_id, password: d.password }));
                         }}>
                         <KeyRound size={13} /> Reset password
+                      </button>
+                    )}
+                    {isSuper && u.role === "clipper" && (
+                      <button type="button" className={btn} disabled={busyId === u.id}
+                        onClick={async () => {
+                          setBusyId(u.id);
+                          setRowError("");
+                          try {
+                            const d = await api(`/api/admin/users/${u.id}/password`);
+                            if (d.password) setCreds({ loginId: u.login_id, password: d.password, current: true });
+                            else setRowError(`${u.login_id}: ${PASSWORD_GONE[d.reason] ?? PASSWORD_GONE.changed_by_clipper}`);
+                          } catch (e) {
+                            setRowError((e as Error).message);
+                          } finally {
+                            setBusyId(null);
+                          }
+                        }}>
+                        <Eye size={13} /> Show password
                       </button>
                     )}
                     {isSuper && u.role === "admin" && (

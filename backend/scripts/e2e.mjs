@@ -280,6 +280,71 @@ try {
   check("staff with users.create can edit a clipper's details", (await st2.req(`/api/admin/users/${c1.user.id}`, { method: "PATCH", json: { action: "update_profile", fullName: "E2E Clipper One", phone: "+91 90000 11111", upiId: "e2e@okaxis" } })).ok);
   check("details were saved", (await one("select phone, upi_id from profiles where id = $1", [c1.user.id]))?.upi_id === "e2e@okaxis");
 
+  // ───────────── reel sync: Submissions ⇄ Rejections & fines ─────────────
+  const look = await st1.req(`/api/admin/rejections/lookup?url=${encodeURIComponent("https://www.instagram.com/p/E2EReelAAA/?utm_source=ig_web_copy_link&vrfl=abc")}`);
+  check("lookup finds the approved submission from a differently-written link", look.ok && look.submission?.id === sb1.submission.id && look.submission.status === "approved" && look.submission.clipperId === c1.user.id && look.submission.campaignId === CID, JSON.stringify(look));
+  const rjSync = await st1.req("/api/admin/rejections", { method: "POST", json: { campaignId: CID, clipperId: c1.user.id, reelUrl: "https://www.instagram.com/reel/E2EReelAAA/?utm_source=ig_web_copy_link", reason: "Brand logo cropped out." } });
+  check("rejecting an approved reel from Rejections also rejects its submission", rjSync.ok && rjSync.submissionId === sb1.submission.id && rjSync.submissionWas === "approved", JSON.stringify(rjSync));
+  const subRow = await one("select status, reject_reason, reviewed_by from submissions where id = $1", [sb1.submission.id]);
+  check("submission row is now rejected with the same reason", subRow?.status === "rejected" && subRow.reject_reason === "Brand logo cropped out." && subRow.reviewed_by === s1.user.id, JSON.stringify(subRow));
+  const rjAgain = await st1.req("/api/admin/rejections", { method: "POST", json: { campaignId: CID, clipperId: c1.user.id, reelUrl: "https://instagram.com/reel/E2EReelAAA", reason: "Second time." } });
+  check("the same reel can't be rejected twice (409)", rjAgain.status === 409, rjAgain.error);
+  check("a reel rejected in Submissions can't be rejected again from Rejections", (await st1.req("/api/admin/rejections", { method: "POST", json: { campaignId: CID, clipperId: c1.user.id, reelUrl: "https://www.instagram.com/reel/E2EReelDDD/", reason: "Again." } })).status === 409);
+  const look2 = await st1.req(`/api/admin/rejections/lookup?url=${encodeURIComponent("https://www.instagram.com/reel/E2EReelAAA/")}`);
+  check("lookup now reports it rejected", look2.submission?.status === "rejected" && !!look2.priorRejection, JSON.stringify(look2));
+  const histSync = await st1.req("/api/admin/rejections?type=reel_rejected");
+  const hAAA = histSync.items?.find((n) => n.reelRef?.includes("E2EReelAAA"));
+  check("rejection history shows the linked submission status", hAAA?.submission?.status === "rejected" && hAAA.submission.id === sb1.submission.id, JSON.stringify(hAAA?.submission));
+  const subRejected = await sub(cl1, { campaignId: CID, accountId: A1, url: "https://www.instagram.com/reel/E2Etest123/?igsh=zz" });
+  check("a reel rejected from Rejections (never submitted) can't be submitted later", subRejected.status === 409 && /rejected/i.test(subRejected.error), subRejected.error);
+  check("clipper sees the sync in their list", (await cl1.req("/api/portal/submissions")).submissions?.find((s) => s.id === sb1.submission.id)?.status === "rejected");
+
+  // ───────────── super admin can see clipper passwords ─────────────
+  const pw1 = await su.req(`/api/admin/users/${c1.user.id}/password`);
+  check("super admin sees a clipper's issued password", pw1.ok && pw1.password === "ClipperOne123" && pw1.loginId === "e2e-c1", JSON.stringify(pw1));
+  check("staff (even with users.create) can't see passwords", (await st2.req(`/api/admin/users/${c1.user.id}/password`)).status === 403);
+  check("staff passwords are never viewable", (await su.req(`/api/admin/users/${s1.user.id}/password`)).status === 403);
+  const vis = await one("select visible_password from credentials where user_id = $1", [c1.user.id]);
+  check("stored encrypted, not in plain text", vis?.visible_password?.startsWith("v1.") && !vis.visible_password.includes("ClipperOne123"));
+  check("staff password has no viewable copy", (await one("select visible_password from credentials where user_id = $1", [s1.user.id]))?.visible_password === null);
+  check("every view is logged", !!(await one("select 1 from audit_log where action = 'PASSWORD_VIEWED' and entity_id = $1", [c1.user.id])));
+
+  // ───────────── invite links (one-click onboarding) ─────────────
+  check("staff can't manage invite links", (await st1.req("/api/admin/invites")).status === 403 && (await st2.req("/api/admin/invites", { method: "POST", json: { label: "x" } })).status === 403);
+  const inv = await su.req("/api/admin/invites", { method: "POST", json: { label: "E2E invite", campaignIds: [CID], maxUses: 2 } });
+  check("super creates an invite link", inv.ok && typeof inv.token === "string" && inv.token.length >= 16, JSON.stringify(inv));
+  created.inviteToken = inv.token;
+  const info = await new Session().req(`/api/join/${inv.token}`);
+  check("public: invite link info shows its campaign", info.ok && info.campaigns?.includes("E2E Test Campaign"), JSON.stringify(info));
+  check("public: unknown link → 404", (await new Session().req("/api/join/doesnotexist123456")).status === 404);
+  const joiner = new Session();
+  const j1 = await joiner.req(`/api/join/${inv.token}`, { method: "POST", json: { fullName: "E2E Joiner One", loginId: "E2E-J1", phone: "+91 98765 43210", upiId: "joiner@okaxis" } });
+  check("clipper signs up through the link and gets a password", j1.ok && j1.loginId === "e2e-j1" && j1.password?.length === 12, JSON.stringify(j1));
+  const meJ = await joiner.req("/api/me");
+  check("…and is signed in straight away as a clipper", meJ.ok && meJ.me?.role === "clipper" && meJ.me?.loginId === "e2e-j1", JSON.stringify(meJ).slice(0, 160));
+  const j1Id = (await one("select id from profiles where login_id = 'e2e-j1'"))?.id;
+  check("…already added to the link's campaign", !!(await one("select 1 from campaign_clippers where clipper_id = $1 and campaign_id = $2", [j1Id, CID])));
+  check("…and the welcome note is in their inbox", (await joiner.req("/api/portal/notifications")).items?.some((n) => /welcome/i.test(n.title)));
+  check("super admin can see the joiner's password", (await su.req(`/api/admin/users/${j1Id}/password`)).password === j1.password);
+  check("the generated password logs in", (await new Session().login("e2e-j1", j1.password)).ok);
+  check("taken login ID → 409", (await new Session().req(`/api/join/${inv.token}`, { method: "POST", json: { fullName: "Dup", loginId: "e2e-j1", phone: "+91 98765 43211" } })).status === 409);
+  check("honeypot sign-up refused", !(await new Session().req(`/api/join/${inv.token}`, { method: "POST", json: { fullName: "Bot", loginId: "e2e-bot", phone: "+91 98765 43212", website: "http://spam" } })).ok);
+  check("a bad phone number is refused", !!(await new Session().req(`/api/join/${inv.token}`, { method: "POST", json: { fullName: "No Phone", loginId: "e2e-np", phone: "abc" } })).fields?.phone);
+  const j2 = await new Session().req(`/api/join/${inv.token}`, { method: "POST", json: { fullName: "E2E Joiner Two", loginId: "e2e-j2", phone: "9876543213" } });
+  check("second sign-up (max 2) works", j2.ok, j2.error);
+  const j3 = await new Session().req(`/api/join/${inv.token}`, { method: "POST", json: { fullName: "E2E Joiner Three", loginId: "e2e-j3", phone: "9876543214" } });
+  check("third sign-up on a 2-use link is refused (410)", j3.status === 410, JSON.stringify(j3));
+  const invRow = (await su.req("/api/admin/invites")).links?.find((l) => l.token === inv.token);
+  check("invite list shows uses and who joined", invRow?.uses === 2 && invRow.joined.length === 2 && !!invRow.problem, JSON.stringify(invRow).slice(0, 200));
+  const inv2 = await su.req("/api/admin/invites", { method: "POST", json: { label: "E2E invite 2" } });
+  const inv2Id = (await su.req("/api/admin/invites")).links.find((l) => l.token === inv2.token).id;
+  check("turn a link off", (await su.req(`/api/admin/invites/${inv2Id}`, { method: "PATCH", json: { action: "set_active", active: false } })).ok);
+  check("a turned-off link can't be used", (await new Session().req(`/api/join/${inv2.token}`)).status === 410);
+  check("turn it back on", (await su.req(`/api/admin/invites/${inv2Id}`, { method: "PATCH", json: { action: "set_active", active: true } })).ok);
+  const newTok = await su.req(`/api/admin/invites/${inv2Id}`, { method: "PATCH", json: { action: "new_token" } });
+  check("replacing the URL kills the old one", newTok.ok && newTok.token !== inv2.token && (await new Session().req(`/api/join/${inv2.token}`)).status === 404);
+  created.inviteToken2 = newTok.token;
+
   // ───────────── frontend pages (only when FRONTEND_URL is set) ─────────────
   if (FRONTEND_URL) {
     const bad = (t) => /Application error|Internal Server Error|Unhandled Runtime Error|Digest:/i.test(t);
@@ -306,6 +371,9 @@ try {
     await page(su, "super", "/admin/clippers", ["E2E Clipper One"]);
     await page(su, "super", `/admin/clippers/${c1.user.id}`, ["E2E Clipper One", "e2e_test_acc1", "instagram.com/reel/E2EReelAAA"]);
     await page(su, "super", "/admin", ["Needs attention"]);
+    await page(su, "super", "/admin/invites", ["Invite links"]);
+    await page(new Session(), "public", `/join/${created.inviteToken2}`, ["Join the", "Create my account"]);
+    await page(new Session(), "public", "/join/doesnotexist123456", ["exist"]);
     await page(st1, "staff", "/admin", ["Welcome back"]);
     await page(st1, "staff", "/admin/campaigns", ["E2E Test Campaign"]);
     await page(st1, "staff", `/admin/campaigns/${CID}`);
@@ -333,6 +401,7 @@ try {
     await redir(st2, "/admin/payouts", "/admin");
     await redir(st2, "/portal", "/admin");
     await redir(st2, "/admin/submissions", "/admin");
+    await redir(st1, "/admin/invites", "/admin");
     await redir(st2, `/admin/clippers/${c1.user.id}`, "/admin/clippers");
     await redir(cl1, "/admin/clippers", "/portal");
     const loginPage = await su.web("/login");
@@ -346,6 +415,8 @@ try {
   check("password change works", (await cl2.req("/api/account/password", { method: "POST", json: { currentPassword: "ClipperTwo123", newPassword: "NewPassword123", confirmPassword: "NewPassword123" } })).ok);
   check("other device signed out after a password change", [401, 403].includes((await cl3.req("/api/portal/notifications")).status));
   check("this device stays signed in", (await cl2.req("/api/portal/notifications")).ok);
+  const pwGone = await su.req(`/api/admin/users/${c2.user.id}/password`);
+  check("once a clipper picks their own password it can't be viewed", pwGone.ok && pwGone.password === null && pwGone.reason === "changed_by_clipper", JSON.stringify(pwGone));
   check("new password works, old one doesn't", (await new Session().login("e2e-c2", "NewPassword123")).ok && !(await new Session().login("e2e-c2", "ClipperTwo123")).ok);
   const term = await su.req(`/api/admin/users/${c1.user.id}`, { method: "PATCH", json: { action: "terminate", reason: "e2e test" } });
   check("super terminates clipper 1", term.ok, term.error);
@@ -355,6 +426,7 @@ try {
   check("reactivated user logs in again", (await new Session().login("e2e-c1", "ClipperOne123")).ok);
   const rs = await su.req(`/api/admin/users/${c1.user.id}`, { method: "PATCH", json: { action: "reset_password" } });
   check("password reset returns a new password", rs.ok && rs.password?.length === 12);
+  check("super admin sees the reset password", (await su.req(`/api/admin/users/${c1.user.id}/password`)).password === rs.password);
   check("permissions can be changed by super admin only", (await su.req(`/api/admin/users/${s1.user.id}`, { method: "PATCH", json: { action: "set_permissions", permissions: ["views.enter"] } })).ok && !(await st2.req(`/api/admin/users/${s1.user.id}`, { method: "PATCH", json: { action: "set_permissions", permissions: [] } })).ok);
 
   // ───────────── public endpoints ─────────────
@@ -381,6 +453,11 @@ try {
     await pgc.query("delete from audit_log where actor_id = any($1) or entity_id = any($1)", [ids]);
     for (const t of ["submissions", "notifications", "fines", "payouts", "social_accounts"]) await pgc.query(`delete from ${t} where clipper_id = any($1)`, [ids]);
     await pgc.query("delete from profiles where id = any($1)", [ids]);
+  }
+  const invIds = (await pgc.query("select id from invite_links where label like 'E2E invite%'")).rows.map((r) => r.id);
+  if (invIds.length) {
+    await pgc.query("delete from audit_log where entity_id = any($1)", [invIds]);
+    await pgc.query("delete from invite_links where id = any($1)", [invIds]);
   }
   await pgc.query("delete from waitlist where email like 'e2e-%'");
   await pgc.query("delete from contact_messages where email like 'e2e-%'");

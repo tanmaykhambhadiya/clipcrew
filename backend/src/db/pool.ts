@@ -42,3 +42,19 @@ export async function closePool() {
   await globalForPool.__ccPool?.end();
   globalForPool.__ccPool = undefined;
 }
+
+/** Runs fn inside one transaction; rolls back if it throws. */
+export async function tx<T>(fn: (q: <R = Record<string, any>>(text: string, params?: unknown[]) => Promise<R[]>) => Promise<T>): Promise<T> {
+  const client = await pool().connect();
+  try {
+    await client.query("begin");
+    const out = await fn(async (text, params = []) => (await client.query(text, params as any[])).rows);
+    await client.query("commit");
+    return out;
+  } catch (e) {
+    await client.query("rollback").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}

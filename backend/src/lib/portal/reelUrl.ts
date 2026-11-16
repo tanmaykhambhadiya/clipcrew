@@ -59,3 +59,22 @@ export function checkReelUrl(raw: string, platform: string): UrlCheck {
       return path.length > 1 || u.search ? { ok: true, url: input, key: `${host}${path}${u.search}` } : bad("Paste the link to the post itself.");
   }
 }
+
+/** Same key as checkReelUrl, but works out the platform from the link itself. null = not a usable link. */
+export function reelKey(raw: string): string | null {
+  let host = "";
+  try {
+    host = new URL(raw.trim()).hostname.toLowerCase().replace(/^(www|m|mobile|vm|vt)\./, "");
+  } catch {
+    return null;
+  }
+  const platform =
+    host === "instagram.com" || host === "instagr.am" ? "instagram"
+    : host === "youtube.com" || host === "youtu.be" ? "youtube"
+    : host.endsWith("tiktok.com") ? "tiktok"
+    : host === "facebook.com" || host === "fb.watch" || host === "fb.com" ? "facebook"
+    : host === "x.com" || host === "twitter.com" ? "x"
+    : "other";
+  const r = checkReelUrl(raw, platform);
+  return r.ok ? r.key : null;
+}

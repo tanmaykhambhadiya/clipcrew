@@ -19,6 +19,7 @@ Both domains must share the parent (`clipcrew.ignitralabs.com`) so the login coo
 | `COOKIE_DOMAIN` | `clipcrew.ignitralabs.com` |
 | `NODE_ENV` | `production` |
 | `PORT` | `4000` |
+| `SECRET_KEY` | a long random string (40+ characters). Lets the super admin view clipper passwords. Don't change it later, or saved passwords can't be shown (reset them to fix). |
 
 **Frontend** — see `.env.example`
 

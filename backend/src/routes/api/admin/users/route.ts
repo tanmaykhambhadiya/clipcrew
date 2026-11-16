@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { PERMISSION_KEYS } from "@/lib/portal/permissions";
 import { generatePassword, hashPassword } from "@/lib/portal/password";
+import { seal } from "@/lib/portal/secretBox";
 import { audit, can, getMe, isStaff } from "@/lib/portal/session";
 
 const createSchema = z.object({
@@ -77,7 +78,8 @@ export async function POST(req: Request) {
 
   const { error: credError } = await supabase
     .from("credentials")
-    .insert({ user_id: created.id, password_hash: await hashPassword(password) });
+    // clippers: keep an encrypted copy so the super admin can look it up again (staff passwords never)
+    .insert({ user_id: created.id, password_hash: await hashPassword(password), visible_password: d.role === "clipper" ? seal(password) : null });
   if (credError) {
     await supabase.from("profiles").delete().eq("id", created.id); // don't leave a user who can't log in
     console.error("[users] credentials insert failed", credError);

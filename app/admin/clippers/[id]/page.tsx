@@ -77,7 +77,7 @@ export default async function ClipperPage({ params }: { params: { id: string } }
         phone={p.phone ?? ""}
         upiId={p.upi_id ?? ""}
         status={p.status}
-        can={{ terminate: d.can.terminate, editProfile: d.can.editProfile, notices: d.can.notices }}
+        can={{ terminate: d.can.terminate, editProfile: d.can.editProfile, notices: d.can.notices, viewPassword: me?.role === "super_admin" }}
       />
 
       <section aria-labelledby="acc-h" className="space-y-3">

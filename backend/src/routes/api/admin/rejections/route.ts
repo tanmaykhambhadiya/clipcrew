@@ -13,6 +13,8 @@ import {
   rupeeAmount,
   scopeFilter,
 } from "@/loaders/rejections";
+import { findPriorRejection, findSubmissionByKey, fmtDate, submissionStatusByKeys } from "@/loaders/reelStatus";
+import { reelKey } from "@/lib/portal/reelUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -94,10 +96,14 @@ export async function GET(req: Request) {
   }
   const top = items.slice(0, 150);
 
-  const { people, campaigns } = await nameMaps(
-    top.flatMap((r) => [r.clipper_id, r.created_by]),
-    top.map((r) => r.campaign_id),
-  );
+  const keyOf = (r: Row) => (r.kind === "reel_rejected" && r.reel_ref ? reelKey(r.reel_ref) : null);
+  const [{ people, campaigns }, subs] = await Promise.all([
+    nameMaps(
+      top.flatMap((r) => [r.clipper_id, r.created_by]),
+      top.map((r) => r.campaign_id),
+    ),
+    submissionStatusByKeys(top.map(keyOf).filter((k): k is string => !!k)),
+  ]);
   return ok({
     items: top.map((r) => ({
       id: r.id,
@@ -105,6 +111,11 @@ export async function GET(req: Request) {
       title: r.title,
       body: r.body,
       reelRef: r.reel_ref,
+      // the matching clip submission, if the clipper submitted this reel (kept in sync)
+      submission: (() => {
+        const k = keyOf(r);
+        return k ? subs.get(k) ?? null : null;
+      })(),
       campaignId: r.campaign_id,
       campaignName: r.campaign_id ? campaigns.get(r.campaign_id) ?? "Deleted campaign" : null,
       clipperId: r.clipper_id,
@@ -142,6 +153,19 @@ export async function POST(req: Request) {
   if (!clipper) return fail(404, "That clipper isn't active.", { clipperId: "Not an active clipper" });
   if (!(await isCampaignMember(d.campaignId, d.clipperId)))
     return fail(400, "That clipper isn't in this campaign.", { clipperId: "Not in this campaign" });
+
+  // Same reel as a clip submission? Then this rejection also rejects that submission, so both screens agree.
+  const key = reelKey(d.reelUrl);
+  const sub = key ? await findSubmissionByKey(key) : null;
+  if (sub && sub.clipperId !== d.clipperId)
+    return fail(409, `This reel was submitted by ${sub.clipperName}. Pick that clipper instead.`, { clipperId: `Submitted by ${sub.clipperName}` });
+  if (sub && sub.campaignId !== d.campaignId)
+    return fail(409, `This reel was submitted for "${sub.campaignName}". Pick that campaign instead.`, { campaignId: `Submitted for ${sub.campaignName}` });
+  if (sub?.status === "rejected")
+    return fail(409, `This reel was already rejected on ${fmtDate(sub.reviewedAt ?? sub.createdAt)}.`, { reelUrl: "Already rejected" });
+  const prior = await findPriorRejection(d.clipperId, key ?? d.reelUrl.trim());
+  if (prior)
+    return fail(409, `This reel was already rejected on ${fmtDate(prior.createdAt)}${prior.byName ? ` by ${prior.byName}` : ""}.`, { reelUrl: "Already rejected" });
 
   const sb = getSupabaseAdmin();
   const finePaise = d.fine ? rupeesToPaise(d.fine) : 0;
@@ -205,5 +229,19 @@ export async function POST(req: Request) {
       reelRef: d.reelUrl,
     });
   }
-  return ok({ id: note.id, fineId });
+
+  let submissionId: string | null = null;
+  if (sub) {
+    const { data: upd } = await sb
+      .from("submissions")
+      .update({ status: "rejected", reviewed_by: me.id, reviewed_at: new Date().toISOString(), reject_reason: d.reason, fine_id: fineId })
+      .eq("id", sub.id)
+      .neq("status", "rejected")
+      .select("id");
+    if (upd?.length) {
+      submissionId = sub.id;
+      await audit(me.id, "SUBMISSION_REJECTED", "submission", sub.id, { status: sub.status }, { status: "rejected", url: d.reelUrl, reason: d.reason, finePaise: finePaise || null, via: "rejections" });
+    }
+  }
+  return ok({ id: note.id, fineId, submissionId, submissionWas: sub?.status ?? null });
 }

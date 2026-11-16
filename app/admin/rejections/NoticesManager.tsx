@@ -72,6 +72,13 @@ function membersOf(campaignId: string, members: Record<string, string[]>, lookup
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+type ReelLookup = {
+  submission: { id: string; status: "pending" | "approved" | "rejected"; clipperId: string; clipperName: string; campaignId: string; campaignName: string; createdAt: string; reviewedAt: string | null; rejectReason: string | null } | null;
+  priorRejection: { id: string; createdAt: string; title: string; byName: string | null } | null;
+};
+
+const SUB_TONE = { pending: "amber", approved: "lime", rejected: "red" } as const;
+
 function RejectForm({ campaigns, members, clippers, canFine, onSent }: Omit<Props, "modes" | "isSuper"> & { canFine: boolean; onSent: () => void }) {
   const lookup = useClipperLookup(clippers);
   const empty = { campaignId: "", clipperId: "", reelUrl: "", reason: "", fine: "" };
@@ -80,7 +87,36 @@ function RejectForm({ campaigns, members, clippers, canFine, onSent }: Omit<Prop
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reel, setReel] = useState<ReelLookup | null>(null);
   const list = f.campaignId ? membersOf(f.campaignId, members, lookup) : [];
+
+  // As soon as a link is pasted: find its clip submission (fills in clipper + campaign) and any earlier rejection.
+  const reelUrl = f.reelUrl.trim();
+  const pickedClipper = f.clipperId;
+  useEffect(() => {
+    setReel(null);
+    if (!/^https?:\/\/\S+\.\S+/i.test(reelUrl)) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const qs = new URLSearchParams({ url: reelUrl, ...(pickedClipper ? { clipper: pickedClipper } : {}) });
+        const r = await api<ReelLookup & { ok: true }>(`/api/admin/rejections/lookup?${qs}`);
+        if (cancelled) return;
+        setReel(r);
+        const s = r.submission;
+        if (s && lookup.has(s.clipperId) && campaigns.some((c) => c.id === s.campaignId)) {
+          setF((cur) => (cur.reelUrl.trim() === reelUrl ? { ...cur, campaignId: s.campaignId, clipperId: s.clipperId } : cur));
+        }
+      } catch {
+        /* the lookup is only a helper — sending still validates everything */
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [reelUrl, pickedClipper, lookup, campaigns]);
+  const alreadyRejected = reel?.submission?.status === "rejected" || !!reel?.priorRejection;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,12 +132,14 @@ function RejectForm({ campaigns, members, clippers, canFine, onSent }: Omit<Prop
     if (fine && !window.confirm(`Send this rejection with a fine of ${formatINR(Math.round(fine * 100))} to ${who}?`)) return;
     setBusy(true);
     try {
-      await api("/api/admin/rejections", {
+      const r = await api<{ submissionId: string | null; submissionWas: string | null }>("/api/admin/rejections", {
         method: "POST",
         json: { campaignId: f.campaignId, clipperId: f.clipperId, reelUrl: f.reelUrl, reason: f.reason, fine },
       });
-      setDone(`Rejection sent to ${who}${fine ? ` with a ${formatINR(Math.round(fine * 100))} fine` : ""}.`);
+      const synced = r.submissionId ? ` Their ${r.submissionWas} submission of this reel is now marked rejected too.` : "";
+      setDone(`Rejection sent to ${who}${fine ? ` with a ${formatINR(Math.round(fine * 100))} fine` : ""}.${synced}`);
       setF({ ...empty, campaignId: f.campaignId });
+      setReel(null);
       onSent();
     } catch (err) {
       const e2 = err as ApiError;
@@ -166,6 +204,33 @@ function RejectForm({ campaigns, members, clippers, canFine, onSent }: Omit<Prop
             onChange={(e) => setF({ ...f, reelUrl: e.target.value })}
           />
         </Field>
+        {reel && (reel.submission || reel.priorRejection) && (
+          <div
+            role="status"
+            className={cn(
+              "mt-3 rounded-2xl border px-4 py-3 text-sm",
+              alreadyRejected ? "border-[#ff8a7a]/40 bg-[#ff8a7a]/10 text-[#ffb4a8]" : "border-line bg-ink text-cream/85",
+            )}
+          >
+            {reel.submission && (
+              <p className="flex flex-wrap items-center gap-2">
+                <Pill tone={SUB_TONE[reel.submission.status]}>{reel.submission.status}</Pill>
+                <span>
+                  Submitted by <span className="text-cream">{reel.submission.clipperName}</span> for{" "}
+                  <span className="text-cream">{reel.submission.campaignName}</span> on {formatDate(reel.submission.createdAt)}.
+                  {reel.submission.status !== "rejected" && " Sending this rejection marks that submission rejected too — clipper and campaign are filled in."}
+                </span>
+              </p>
+            )}
+            {alreadyRejected && (
+              <p className={cn(reel.submission && "mt-2")}>
+                Already rejected
+                {reel.priorRejection ? ` on ${formatDate(reel.priorRejection.createdAt)}${reel.priorRejection.byName ? ` by ${reel.priorRejection.byName}` : ""}` : reel.submission?.reviewedAt ? ` on ${formatDate(reel.submission.reviewedAt)}` : ""}
+                {" "}— it can&apos;t be rejected twice.
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="md:col-span-2">
         <Field id="rj-reason" title="Why was it rejected?" error={errors.reason} hint={`${f.reason.length}/1000 — the clipper sees this exactly as written.`}>
@@ -201,7 +266,7 @@ function RejectForm({ campaigns, members, clippers, canFine, onSent }: Omit<Prop
         <ErrorNote>{error}</ErrorNote>
         <SuccessNote text={done} />
         <div>
-          <Button type="submit" size="sm" disabled={busy || !f.campaignId || !f.clipperId}>
+          <Button type="submit" size="sm" disabled={busy || !f.campaignId || !f.clipperId || alreadyRejected}>
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />} Send rejection
           </Button>
         </div>
@@ -473,6 +538,7 @@ type NoticeItem = {
   title: string;
   body: string | null;
   reelRef: string | null;
+  submission: { id: string; status: "pending" | "approved" | "rejected" } | null;
   campaignId: string | null;
   campaignName: string | null;
   clipperId: string;
@@ -762,6 +828,11 @@ function History({ isSuper, campaigns, clippers, reloadKey }: { isSuper: boolean
                 {n.reelRef && (
                   <div className="mt-3">
                     <RefLink value={n.reelRef} labelText={n.kind === "info" ? "Open link" : "Open reel"} />
+                    {n.submission && (
+                      <a href={`/admin/submissions${n.submission.status === "pending" ? "" : `?status=${n.submission.status}`}`} className="ml-3 inline-flex items-center gap-1.5 align-middle text-xs text-muted-dark hover:text-cream">
+                        <Pill tone={SUB_TONE[n.submission.status]}>submission {n.submission.status}</Pill>
+                      </a>
+                    )}
                   </div>
                 )}
               </li>

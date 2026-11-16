@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { PERMISSION_KEYS } from "@/lib/portal/permissions";
 import { generatePassword, hashPassword } from "@/lib/portal/password";
+import { seal } from "@/lib/portal/secretBox";
 import { audit, can, endAllSessions, getMe, isStaff } from "@/lib/portal/session";
 
 const actionSchema = z.discriminatedUnion("action", [
@@ -50,7 +51,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       const password = body.password ?? generatePassword();
       const { error } = await supabase
         .from("credentials")
-        .upsert({ user_id: target.id, password_hash: await hashPassword(password), updated_at: new Date().toISOString() });
+        .upsert({
+          user_id: target.id,
+          password_hash: await hashPassword(password),
+          // a password someone else set for a clipper stays viewable by the super admin; your own never is
+          visible_password: target.role === "clipper" && !own ? seal(password) : null,
+          updated_at: new Date().toISOString(),
+        });
       if (error) return NextResponse.json({ ok: false, error: "Couldn't reset the password." }, { status: 500 });
       await endAllSessions(target.id, { keepCurrent: own }); // old password's sessions stop working
       await audit(me.id, "PASSWORD_RESET", "profile", target.id);
