@@ -4,24 +4,25 @@ Decided with the owner (Nov 2026):
 
 | Part | What | Domain | Deploy |
 |---|---|---|---|
-| Frontend | the existing Next.js app, **no database access, no secrets** |  | Coolify resource 1 (repo root, as today) |
-| Backend | new **Fastify + TypeScript** service in , owns all business logic, auth and the database |  | Coolify resource 2 (**Base Directory = /backend**) |
+| Frontend | the existing Next.js app: **no database access, no secrets** | `clipcrew.ignitralabs.com` | Coolify resource 1 (repo root, as today) |
+| Backend | new **Fastify + TypeScript** service in `backend/`: owns business logic, auth and the database | `api.clipcrew.ignitralabs.com` | Coolify resource 2 (**Base Directory = /backend**) |
 | Database | the self-hosted Postgres | internal only | same Coolify server |
 
-Supabase is removed completely (code, env vars, packages, the one-off copy script after use). No PostgREST.
+Supabase is removed completely (code, env vars, packages; the one-off copy script after it has been used). No PostgREST.
 
 **How the split works (keeps risk low):**
-- The backend reuses the existing route files almost verbatim. They already export  returning web s. The backend loads  with a Next-style file-system router ( becomes ), converts Fastify requests to web s, and runs each handler inside an AsyncLocalStorage context that gives  a request-scoped cookie jar. Copy route files over, replace  with , fix imports.
-- Pages that read the database directly today (see list in git history of this doc) become backend **read endpoints** under -style names; the frontend pages fetch them (server components forward the visitor's cookie, client components use ).
-- **Auth/cookies:** backend sets  (HttpOnly, Secure, SameSite=Lax,  in production so both hosts see it; host-only in dev). The frontend middleware only checks the cookie exists; the backend validates it.
-- **CORS/CSRF:** backend allows only  with credentials, and rejects state-changing requests whose Origin header isn't .
-- Env: frontend gets  (browser) and  (server-side, can be the internal URL). Backend gets , , , .
+- The backend reuses the existing route files almost verbatim. They already export `GET/POST/PATCH/DELETE(req: Request, { params })` and return web `Response`s. The backend loads `backend/src/routes/**/route.ts` with a Next-style file-system router (`[id]` becomes `:id`), converts each Fastify request into a web `Request`, and runs the handler inside an AsyncLocalStorage context that gives `cookies()` a request-scoped cookie jar. To port a route: copy the file, replace `NextResponse` with `Response`, and fix imports.
+- Pages that read the database directly today become backend **read endpoints**; the frontend pages fetch them (server components forward the visitor's cookie, client components use `credentials: "include"`).
+- **Auth/cookies:** the backend sets `cc_session` (HttpOnly, Secure, SameSite=Lax, `Domain=clipcrew.ignitralabs.com` in production so both hosts see it; host-only in dev). The frontend middleware only checks that the cookie exists; the backend validates it.
+- **CORS/CSRF:** the backend allows only `FRONTEND_ORIGIN`, with credentials, and rejects state-changing requests whose Origin header isn't `FRONTEND_ORIGIN`.
+- **Env:** frontend gets `NEXT_PUBLIC_API_URL` (browser) and `API_URL` (server-side; may be the internal URL). Backend gets `DATABASE_URL`, `FRONTEND_ORIGIN`, `COOKIE_DOMAIN`, `PORT`.
 
-**Build order:** (1) backend scaffold + DB layer + runtime shims, (2) port all API routes, (3) page read endpoints + frontend refactor page by page, (4) new features (Phase 3/4 below, built in the backend + frontend), (5) e2e tests, (6) cut-over.
+**Build order:** (1) backend scaffold + DB layer + runtime shims, (2) port all API routes, (3) page read endpoints + frontend refactor page by page, (4) new features (Phases 3 and 4 below, built in backend + frontend), (5) e2e tests, (6) cut-over.
 
-In the phases below, read app/api/... as backend/src/routes/... and read  as the backend DB adapter.
+In the phases below, read `app/api/...` as `backend/src/routes/...` and `getSupabaseAdmin()` as the backend DB adapter.
 
 ---
+
 
 # Implementation plan: direct Postgres, clip submissions, easier admin
 
