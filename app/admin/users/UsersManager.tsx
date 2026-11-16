@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, Copy, KeyRound, LoaderCircle, MessageCircle, Plus, ShieldOff, UserCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -241,7 +242,7 @@ export function UsersManager({ isSuper, meId }: { isSuper: boolean; meId: string
             {users?.map((u) => (
               <tr key={u.id} className="border-b border-line/60 align-top last:border-0">
                 <td className="px-5 py-4">
-                  <p className="font-semibold">{u.full_name}</p>
+                  <p className="font-semibold">{u.role === "clipper" ? <Link href={`/admin/clippers/${u.id}`} className="underline-offset-4 hover:text-lime hover:underline">{u.full_name}</Link> : u.full_name}</p>
                   <p className="font-mono text-xs text-muted-dark">{u.login_id}</p>
                 </td>
                 <td className="px-5 py-4">

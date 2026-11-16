@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/portal/LogoutButton";
 import { NavLinks } from "@/components/portal/NavLinks";
 import { can, getMe, isStaff } from "@/lib/portal/session";
+import { getNavCounts } from "@/lib/portal/navCounts";
 
 export const metadata: Metadata = { title: "Admin — ClipCrew", robots: { index: false, follow: false } };
 
@@ -12,19 +13,24 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!me) redirect("/login");
   if (!isStaff(me)) redirect("/portal");
 
+  const counts = await getNavCounts(); // menu badges; shows none if the numbers can't load
+
   const nav = [
     { href: "/admin", label: "Overview", show: true },
     { href: "/admin/campaigns", label: "Campaigns", show: true }, // staff see the campaigns assigned to them
     { href: "/admin/views", label: "Weekly views", show: can(me, "views.enter") },
-    { href: "/admin/accounts", label: "Accounts", show: can(me, "accounts.verify") },
-    { href: "/admin/rejections", label: "Notices & fines", show: can(me, "rejections.send") || can(me, "fines.create") || can(me, "campaigns.manage") },
+    { href: "/admin/submissions", label: "Submissions", show: can(me, "submissions.review"), badge: counts.pendingSubmissions },
+    { href: "/admin/accounts", label: "Accounts", show: can(me, "accounts.verify"), badge: counts.pendingAccounts },
+    { href: "/admin/clippers", label: "Clippers", show: can(me, "users.create") },
+    { href: "/admin/notices", label: "Notices", show: can(me, "campaigns.manage") },
+    { href: "/admin/rejections", label: "Rejections & fines", show: can(me, "rejections.send") || can(me, "fines.create") },
     { href: "/admin/payouts", label: "Payouts", show: can(me, "payouts.manage") },
     { href: "/admin/users", label: "Users", show: can(me, "users.create") },
     { href: "/admin/activity", label: "Activity", show: can(me, "audit.view") },
     { href: "/admin/settings", label: "Settings", show: true },
   ]
     .filter((n) => n.show)
-    .map(({ href, label }) => ({ href, label }));
+    .map(({ href, label, badge }) => ({ href, label, badge }));
 
   return (
     <div className="min-h-screen bg-ink text-cream">

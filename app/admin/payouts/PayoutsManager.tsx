@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, Check, LoaderCircle, Search, Trash2, X } from "lucide-react";
@@ -205,7 +206,7 @@ export function PayoutsManager({
                 {rows.map((c) => (
                   <tr key={c.id} className={cn(tr, c.balancePaise > 0 && "bg-lime/[0.04]")}>
                     <td className={td}>
-                      <p className="font-medium text-cream">{c.name}</p>
+                      <p className="font-medium text-cream"><Link href={`/admin/clippers/${c.id}`} className="underline-offset-4 hover:text-lime hover:underline">{c.name}</Link></p>
                       <p className="font-mono text-xs text-muted-dark">{c.loginId}</p>
                     </td>
                     <td className={cn(td, "break-all font-mono text-xs")}>{c.upiId || <span className="text-[#f5c451]">Not added</span>}</td>
@@ -290,7 +291,7 @@ export function PayoutsManager({
                   <tr key={p.id} className={tr}>
                     <td className={cn(td, "whitespace-nowrap")}>{formatDate(p.paidOn)}</td>
                     <td className={td}>
-                      <p className="text-cream">{p.clipperName}</p>
+                      <p className="text-cream"><Link href={`/admin/clippers/${p.clipperId}`} className="underline-offset-4 hover:text-lime hover:underline">{p.clipperName}</Link></p>
                       {p.clipperLoginId && <p className="font-mono text-xs text-muted-dark">{p.clipperLoginId}</p>}
                     </td>
                     <td className={cn(td, "text-right font-semibold text-lime")}>{formatINR(p.amountPaise)}</td>

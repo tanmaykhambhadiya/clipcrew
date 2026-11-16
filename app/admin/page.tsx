@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { pageApi } from "@/lib/server-api";
+import { getNavCounts } from "@/lib/portal/navCounts";
 import { can, getMe } from "@/lib/portal/session";
 import { compactViews, formatINR, formatViews } from "@/lib/portal/money";
 import { formatWeek } from "@/lib/portal/weeks";
@@ -39,6 +40,7 @@ type Overview = {
   lastWeek: string;
   isScoped: boolean;
   recent: ActivityEntry[] | null;
+  missingViews?: number;
 };
 
 function StatTile({ t }: { t: Tile }) {
@@ -72,7 +74,7 @@ function when(iso: string) {
 
 export default async function AdminHome() {
   const me = (await getMe())!; // the layout already redirects signed-out users and clippers
-  const s = await pageApi<Overview>("/api/pages/admin/overview");
+  const [s, counts] = await Promise.all([pageApi<Overview>("/api/pages/admin/overview"), getNavCounts()]);
   const dash = "—";
 
   const activeCampaigns = s.campaigns?.filter((c) => c.status === "active").length;
@@ -137,6 +139,16 @@ export default async function AdminHome() {
 
   const recent = s.recent;
 
+  // Things that need a person's attention right now — only what this user may act on.
+  const attention = [
+    { n: counts.accountsNeedingCode, one: "account is waiting for a verification code", many: "accounts are waiting for a verification code", href: "/admin/accounts" },
+    { n: counts.pendingAccounts !== undefined ? counts.pendingAccounts - (counts.accountsNeedingCode ?? 0) : undefined, one: "account has a code and waits for you to verify", many: "accounts have a code and wait for you to verify", href: "/admin/accounts" },
+    { n: counts.pendingSubmissions, one: "reel submission is waiting for review", many: "reel submissions are waiting for review", href: "/admin/submissions" },
+    { n: s.missingViews, one: "active campaign has no views entered for last week", many: "active campaigns have no views entered for last week", href: "/admin/views" },
+    { n: s.unpaid?.clippers, one: "clipper is owed money", many: "clippers are owed money", href: "/admin/payouts" },
+  ].filter((a) => (a.n ?? 0) > 0);
+  const canAct = counts.pendingAccounts !== undefined || counts.pendingSubmissions !== undefined || s.missingViews !== undefined || s.unpaid !== undefined;
+
   return (
     <div className="space-y-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -149,6 +161,31 @@ export default async function AdminHome() {
         </div>
         <Pill tone={me.role === "super_admin" ? "lime" : "cyan"}>{me.role === "super_admin" ? "Super admin · all campaigns" : "Staff · your campaigns"}</Pill>
       </div>
+
+      {canAct && (
+        <section aria-labelledby="attn-h" className="rounded-3xl border border-line bg-ink-2 p-6">
+          <h2 id="attn-h" className="font-mono text-[11px] uppercase tracking-[0.16em] text-lime">
+            Needs attention
+          </h2>
+          {attention.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-dark">All caught up — nothing is waiting on you.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-line">
+              {attention.map((a) => (
+                <li key={a.one}>
+                  <Link href={a.href} className="flex items-center justify-between gap-4 py-3 text-sm transition hover:text-lime">
+                    <span>
+                      <span className="mr-2 font-display text-2xl font-bold text-lime">{a.n}</span>
+                      {a.n === 1 ? a.one : a.many}
+                    </span>
+                    <ArrowRight size={16} aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <section aria-label="Key numbers" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {tiles.map((t) => (

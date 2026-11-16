@@ -4,6 +4,7 @@ import { can, type Me } from "@/lib/portal/session";
 import { addDays, currentWeekStart } from "@/lib/portal/weeks";
 import { balanceOf, clipperIdsForCampaigns, fetchAll, fetchBalances, fetchByIds } from "@/routes/api/admin/export/data";
 import { loadActivity, type ActivityEntry } from "@/routes/api/admin/activity/load";
+import { sql } from "@/db/pool";
 
 /** Runs a stat loader; a failure shows "—" instead of breaking the whole dashboard. */
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
@@ -101,5 +102,24 @@ export async function GET() {
     ? safe(async () => (await loadActivity({ limit: 10 })).entries, null as ActivityEntry[] | null)
     : Promise.resolve(null as ActivityEntry[] | null);
   const stats = await loadStats(me);
-  return ok({ ...stats, recent: await recentPromise });
+
+  // Active campaigns that have linked accounts but no weekly views entered for last week yet.
+  let missingViews: number | undefined;
+  if (can(me, "views.enter")) {
+    const scope = await staffCampaignIds(me);
+    missingViews = await safe(async () => {
+      if (scope !== null && scope.length === 0) return 0;
+      const params: unknown[] = [stats.lastWeek];
+      const scopeSql = scope ? `and c.id = any($${params.push(scope)})` : "";
+      const [r] = await sql<{ n: number }>(
+        `select count(*)::int as n from campaigns c
+          where c.status = 'active' ${scopeSql}
+            and exists (select 1 from campaign_accounts ca where ca.campaign_id = c.id)
+            and not exists (select 1 from weekly_views w where w.campaign_id = c.id and w.week_start = $1)`,
+        params,
+      );
+      return r.n;
+    }, undefined as number | undefined);
+  }
+  return ok({ ...stats, missingViews, recent: await recentPromise });
 }

@@ -18,6 +18,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const nav = [
     { href: "/portal", label: "Overview" },
     { href: "/portal/campaigns", label: "Campaigns" },
+    { href: "/portal/submissions", label: "Submissions" },
     { href: "/portal/accounts", label: "Accounts" },
     { href: "/portal/wallet", label: "Wallet" },
     { href: "/portal/inbox", label: "Inbox", badge: unread },

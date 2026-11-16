@@ -4,7 +4,7 @@ export const ACTION_LABELS: Record<string, string> = {
   LOGIN: "Signed in",
   LOGOUT: "Signed out",
   PASSWORD_CHANGED: "Changed own password",
-  PROFILE_UPDATED: "Updated payout details",
+  PROFILE_UPDATED: "Profile details updated",
   DATA_EXPORTED: "Exported CSV",
 
   USER_CREATED: "User added",
@@ -63,6 +63,11 @@ export const ACTION_LABELS: Record<string, string> = {
   PAYOUT_RECORDED: "Payout recorded",
   PAYOUT_CREATED: "Payout recorded",
   PAYOUT_DELETED: "Payout removed",
+
+  SUBMISSION_APPROVED: "Reel submission approved",
+  SUBMISSION_REJECTED: "Reel submission rejected",
+  SUBMISSIONS_APPROVED: "Reel submissions approved in bulk",
+  NOTICE_SENT: "Notice sent",
 };
 
 export function actionLabel(action: string): string {

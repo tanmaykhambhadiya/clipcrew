@@ -105,7 +105,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
               return (
                 <tr key={r.id} className={tr}>
                   <td className={td}>
-                    <p className="font-medium">{r.clipper?.full_name ?? "Unknown"}</p>
+                    <p className="font-medium">{r.clipper ? <Link href={`/admin/clippers/${r.clipper.id}`} className="underline-offset-4 hover:text-lime hover:underline">{r.clipper.full_name}</Link> : "Unknown"}</p>
                     <p className="font-mono text-xs text-muted-dark">{r.clipper?.login_id}</p>
                     {r.clipper?.status === "terminated" && (
                       <span className="mt-1 inline-block">

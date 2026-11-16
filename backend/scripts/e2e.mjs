@@ -34,9 +34,10 @@ const check = (name, cond, extra = "") => {
 };
 
 let ipN = 1;
+const RUN_OCTET = 20 + Math.floor(Math.random() * 200);
 class Session {
   jar = new Map();
-  ip = `10.55.${Math.floor(ipN / 250)}.${(ipN++ % 250) + 1}`;
+  ip = `10.${RUN_OCTET}.${Math.floor(ipN / 250)}.${(ipN++ % 250) + 1}`; // random per run, so repeated runs never share a rate-limit bucket
   async req(path, { method = "GET", json, raw = false, origin = ORIGIN } = {}) {
     const headers = { "x-forwarded-for": this.ip, cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ") };
     if (json !== undefined) headers["Content-Type"] = "application/json";
@@ -299,18 +300,26 @@ try {
     await page(su, "super", "/admin/users"); // the table itself loads in the browser (covered by the API checks)
     await page(su, "super", "/admin/activity");
     await page(su, "super", "/admin/settings");
+    await page(su, "super", "/admin/submissions", ["Review the reels"]);
+    await page(su, "super", "/admin/submissions?status=all", ["instagram.com/reel/E2EReelAAA"]);
+    await page(su, "super", "/admin/notices", ["Brief update"]);
+    await page(su, "super", "/admin/clippers", ["E2E Clipper One"]);
+    await page(su, "super", `/admin/clippers/${c1.user.id}`, ["E2E Clipper One", "e2e_test_acc1", "instagram.com/reel/E2EReelAAA"]);
+    await page(su, "super", "/admin", ["Needs attention"]);
     await page(st1, "staff", "/admin", ["Welcome back"]);
     await page(st1, "staff", "/admin/campaigns", ["E2E Test Campaign"]);
     await page(st1, "staff", `/admin/campaigns/${CID}`);
     await page(st1, "staff", `/admin/views?${wk}`, ["e2e_test_acc1"]);
     await page(st1, "staff", "/admin/rejections");
     await page(st1, "staff", "/admin/settings");
-    await page(cl1, "clipper", "/portal", ["3,200"]);
+    await page(st1, "staff", "/admin/submissions", ["Review the reels"]);
+    await page(cl1, "clipper", "/portal", ["3,100"]); // 6,200 earned − 3,000 paid − ₹100 active fine
     await page(cl1, "clipper", `/portal?c=${CID}&r=all`, ["E2E Test Campaign"]);
     await page(cl1, "clipper", "/portal/campaigns", ["E2E Test Campaign"]);
     await page(cl1, "clipper", "/portal/accounts", ["e2e_test_acc1"]);
     await page(cl1, "clipper", "/portal/wallet", ["UPI-E2E-1"]);
     await page(cl1, "clipper", "/portal/inbox");
+    await page(cl1, "clipper", "/portal/submissions", ["instagram.com/reel/E2EReelAAA", "Submit a reel"]);
     await page(cl1, "clipper", "/portal/settings");
     await page(new Session(), "public", "/", ["ClipCrew"]);
     await page(new Session(), "public", "/login");
@@ -323,6 +332,9 @@ try {
     await redir(cl2, "/admin", "/portal");
     await redir(st2, "/admin/payouts", "/admin");
     await redir(st2, "/portal", "/admin");
+    await redir(st2, "/admin/submissions", "/admin");
+    await redir(st2, `/admin/clippers/${c1.user.id}`, "/admin/clippers");
+    await redir(cl1, "/admin/clippers", "/portal");
     const loginPage = await su.web("/login");
     check("signed-in user is sent away from /login", loginPage.status >= 300 && loginPage.status < 400);
   }
@@ -357,6 +369,11 @@ try {
   failN++;
   console.log("CRASH", e);
 } finally {
+  if (process.env.KEEP) {
+    console.log("KEEP=1: leaving the e2e data in place (e2e-* users, E2E Test Campaign) — clean up with scripts/e2e-clean.mjs");
+    await pgc.end();
+    process.exit(failN ? 1 : 0);
+  }
   // Remove everything this run created (profiles with login_id e2e-*, the campaign, and their rows).
   const ids = (await many("select id from profiles where login_id like 'e2e-%'")).map((r) => r.id);
   await pgc.query("delete from campaigns where name = 'E2E Test Campaign'");

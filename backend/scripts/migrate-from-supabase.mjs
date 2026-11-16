@@ -1,8 +1,12 @@
 // One-off: copy all data from the old Supabase project into the self-hosted Postgres, then give every
-// user a fresh password (Supabase password hashes can't be read through its API). Prints the new passwords ONCE.
+// user a fresh password (Supabase password hashes can't be read through its API). The new passwords are
+// written to backend/.migration-passwords.local (git-ignored), never printed.
 // Usage: SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DATABASE_URL=... node scripts/migrate-from-supabase.mjs
 import { randomBytes, randomInt, scryptSync } from "node:crypto";
+import { writeFileSync } from "node:fs";
 import pg from "pg";
+
+const JSON_COLUMNS = { audit_log: ["before", "after"] };
 
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !DATABASE_URL) {
@@ -54,7 +58,13 @@ try {
     const data = table === "profiles" ? rows.map((r) => ({ ...r, created_by: null })) : rows;
     const cols = Object.keys(data[0]);
     for (const row of data) {
-      const vals = cols.map((c) => (row[c] !== null && typeof row[c] === "object" && !Array.isArray(row[c]) ? JSON.stringify(row[c]) : row[c]));
+      const vals = cols.map((c) => {
+        const v = row[c];
+        if (v === null || v === undefined) return null;
+        // jsonb columns are always sent as JSON text (a JS array would otherwise become a Postgres array)
+        if (JSON_COLUMNS[table]?.includes(c)) return JSON.stringify(v);
+        return typeof v === "object" && !Array.isArray(v) ? JSON.stringify(v) : v;
+      });
       await db.query(
         `insert into ${table} (${cols.map((c) => `"${c}"`).join(",")}) values (${cols.map((_, i) => `$${i + 1}`).join(",")})`,
         vals,
@@ -72,8 +82,10 @@ try {
   }
   await db.query("commit");
 
-  console.log("\nAll data copied. New passwords (shown once — share them with each person):");
-  for (const p of passwords) console.log(`  ${p.loginId.padEnd(16)} ${p.password}   (${p.role}${p.status !== "active" ? ", " + p.status : ""})`);
+  // Passwords go to a private, git-ignored file — never to the terminal or logs.
+  const lines = passwords.map((p) => `${p.loginId.padEnd(16)} ${p.password}   (${p.role}${p.status !== "active" ? ", " + p.status : ""})`);
+  writeFileSync(new URL("../.migration-passwords.local", import.meta.url), ["New passwords — share each with its owner, then delete this file.", "", ...lines, ""].join("\n"));
+  console.log(`\nAll data copied. New passwords for ${passwords.length} user(s) saved to backend/.migration-passwords.local`);
 } catch (e) {
   await db.query("rollback").catch(() => {});
   console.error("Copy failed, nothing was written:", e.message);
