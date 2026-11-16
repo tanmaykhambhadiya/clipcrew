@@ -6,7 +6,8 @@ import { can, getMe } from "@/lib/portal/session";
 import { formatDate } from "@/lib/portal/weeks";
 import { EmptyState, ErrorNote, PLATFORM_LABELS, PageTitle, Pill, TableWrap, field, smallBtn, td, th, tr } from "@/components/portal/ui";
 import { profileUrl } from "@/app/portal/accounts/handle";
-import { ACCOUNT_TABS, loadAccountQueue, type AccountTab } from "./query";
+import { pageApi } from "@/lib/server-api";
+import { ACCOUNT_TABS, type AccountTab, type QueueRow } from "./types";
 import { AccountActions, CodeCell } from "./AccountActions";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,12 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
 
   const tab: AccountTab = (ACCOUNT_TABS as readonly string[]).includes(searchParams.status ?? "") ? (searchParams.status as AccountTab) : "pending";
   const q = (searchParams.q ?? "").slice(0, 60);
-  const { rows, counts, error, truncated } = await loadAccountQueue(tab, q);
+  const qs = new URLSearchParams({ status: tab });
+  if (q) qs.set("q", q);
+  const data = await pageApi<{ accounts: QueueRow[]; counts: Record<"pending" | "verified" | "rejected", number>; truncated: boolean }>(`/api/admin/accounts?${qs}`);
+  const { counts, truncated } = data;
+  const rows = data.accounts;
+  const error: string | null = null;
   const isSuper = me.role === "super_admin";
 
   const href = (t: AccountTab) => {
@@ -99,7 +105,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
               return (
                 <tr key={r.id} className={tr}>
                   <td className={td}>
-                    <p className="font-medium">{r.clipper?.full_name ?? "Unknown"}</p>
+                    <p className="font-medium">{r.clipper ? <Link href={`/admin/clippers/${r.clipper.id}`} className="underline-offset-4 hover:text-lime hover:underline">{r.clipper.full_name}</Link> : "Unknown"}</p>
                     <p className="font-mono text-xs text-muted-dark">{r.clipper?.login_id}</p>
                     {r.clipper?.status === "terminated" && (
                       <span className="mt-1 inline-block">

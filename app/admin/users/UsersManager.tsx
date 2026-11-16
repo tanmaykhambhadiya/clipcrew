@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { Check, Copy, KeyRound, LoaderCircle, MessageCircle, Plus, ShieldOff, UserCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PERMISSIONS, type Permission } from "@/lib/portal/permissions";
 import { Button } from "@/components/ui/Button";
+import { apiUrl } from "@/lib/apiUrl";
 
 type User = {
   id: string;
@@ -22,7 +24,7 @@ const field =
   "w-full rounded-xl border border-line bg-ink px-3.5 py-2.5 text-sm text-cream placeholder:text-muted-dark/50 focus:border-lime focus:outline-none focus:ring-2 focus:ring-lime/40";
 
 async function api(url: string, init?: RequestInit) {
-  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+  const res = await fetch(apiUrl(url), { credentials: "include", headers: { "Content-Type": "application/json" }, ...init });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) throw Object.assign(new Error(data.error || "Something went wrong."), { fields: data.fields });
   return data;
@@ -240,7 +242,7 @@ export function UsersManager({ isSuper, meId }: { isSuper: boolean; meId: string
             {users?.map((u) => (
               <tr key={u.id} className="border-b border-line/60 align-top last:border-0">
                 <td className="px-5 py-4">
-                  <p className="font-semibold">{u.full_name}</p>
+                  <p className="font-semibold">{u.role === "clipper" ? <Link href={`/admin/clippers/${u.id}`} className="underline-offset-4 hover:text-lime hover:underline">{u.full_name}</Link> : u.full_name}</p>
                   <p className="font-mono text-xs text-muted-dark">{u.login_id}</p>
                 </td>
                 <td className="px-5 py-4">

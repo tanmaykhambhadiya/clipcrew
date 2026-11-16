@@ -3,6 +3,7 @@
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { contactSchema, firstErrors } from "@/lib/validation";
+import { apiUrl } from "@/lib/apiUrl";
 
 const input =
   "w-full rounded-xl border border-line bg-ink-2 px-3.5 py-2.5 text-sm text-cream placeholder:text-muted-dark/60 focus:border-lime focus:outline-none focus:ring-2 focus:ring-lime/40";
@@ -27,7 +28,8 @@ export function ContactForm() {
     setServerError("");
     setStatus("sending");
     try {
-      const res = await fetch("/api/contact", {
+      const res = await fetch(apiUrl("/api/contact"), {
+        credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...parsed.data, website: raw.website ?? "" }),

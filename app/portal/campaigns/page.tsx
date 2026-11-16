@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { getMe } from "@/lib/portal/session";
 import { formatINR, formatViews } from "@/lib/portal/money";
 import { Card, EmptyState, ErrorNote, Label, PageTitle } from "@/components/portal/ui";
-import { loadClipperCampaigns } from "./data";
+import { pageApi } from "@/lib/server-api";
+import type { ClipperCampaign, MyAccount } from "./data";
 import { CampaignCard } from "./CampaignCard";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export default async function PortalCampaignsPage() {
   const me = await getMe();
   if (!me || me.role !== "clipper") redirect("/login");
 
-  const { campaigns, accounts, error } = await loadClipperCampaigns(me.id);
+  const { campaigns, accounts, error } = await pageApi<{ campaigns: ClipperCampaign[]; accounts: MyAccount[]; error: string | null }>("/api/pages/portal/campaigns");
   const verified = accounts.filter((a) => a.status === "verified");
   const totalViews = campaigns.reduce((s, c) => s + c.views, 0);
   const totalEarned = campaigns.reduce((s, c) => s + c.earned_paise, 0);

@@ -1,0 +1,18 @@
+// Staff permissions — must match the check constraint on profiles.permissions.
+export const PERMISSIONS = [
+  { key: "users.create", label: "Add clippers & reset their passwords" },
+  { key: "accounts.verify", label: "Verify or reject clipper accounts" },
+  { key: "campaigns.manage", label: "Create/edit campaigns, assign clippers" },
+  { key: "views.enter", label: "Enter weekly views" },
+  { key: "rejections.send", label: "Send reel-rejected notices" },
+  { key: "fines.create", label: "Add fines" },
+  { key: "payouts.manage", label: "Record payouts" },
+  { key: "audit.view", label: "See the activity log" },
+  { key: "export.data", label: "Export CSV" },
+  { key: "submissions.review", label: "Review clip submissions" },
+] as const;
+
+export type Permission = (typeof PERMISSIONS)[number]["key"];
+export type PortalRole = "super_admin" | "admin" | "clipper";
+
+export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key) as Permission[];

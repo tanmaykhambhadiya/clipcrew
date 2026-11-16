@@ -1,10 +1,11 @@
 "use client";
 
 import { LogOut } from "lucide-react";
+import { apiUrl } from "@/lib/apiUrl";
 
 export function LogoutButton() {
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
     window.location.assign("/login");
   }
   return (

@@ -4,7 +4,7 @@ import { ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/portal/client";
 import { EmptyState, ErrorNote, Label, Pill, field, smallBtn } from "@/components/portal/ui";
-import type { ActivityEntry } from "@/app/api/admin/activity/load";
+import type { ActivityEntry } from "@/lib/portal/types";
 import { actionLabel, actionTone } from "./labels";
 
 type Page = { entries: ActivityEntry[]; hasMore: boolean; nextOffset: number };

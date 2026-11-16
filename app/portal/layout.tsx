@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { Bell } from "lucide-react";
 import { LogoutButton } from "@/components/portal/LogoutButton";
 import { NavLinks } from "@/components/portal/NavLinks";
-import { getSupabaseAdmin } from "@/lib/supabase";
-import { getMe, isStaff } from "@/lib/portal/session";
+import { getMe, getUnreadCount, isStaff } from "@/lib/portal/session";
 
 export const metadata: Metadata = { title: "Your portal — ClipCrew", robots: { index: false, follow: false } };
 
@@ -14,18 +13,15 @@ export default async function PortalLayout({ children }: { children: React.React
   if (!me) redirect("/login");
   if (isStaff(me)) redirect("/admin");
 
-  const { count: unread } = await getSupabaseAdmin()
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("clipper_id", me.id)
-    .is("read_at", null);
+  const unread = await getUnreadCount();
 
   const nav = [
     { href: "/portal", label: "Overview" },
     { href: "/portal/campaigns", label: "Campaigns" },
+    { href: "/portal/submissions", label: "Submissions" },
     { href: "/portal/accounts", label: "Accounts" },
     { href: "/portal/wallet", label: "Wallet" },
-    { href: "/portal/inbox", label: "Inbox", badge: unread ?? 0 },
+    { href: "/portal/inbox", label: "Inbox", badge: unread },
     { href: "/portal/settings", label: "Settings" },
   ];
 

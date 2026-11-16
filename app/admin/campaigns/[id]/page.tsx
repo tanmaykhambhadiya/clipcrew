@@ -2,15 +2,14 @@ import { ArrowLeft, Lock, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Card, EmptyState, Label, PLATFORM_LABELS, PageTitle, Pill, TableWrap, td, th, tr } from "@/components/portal/ui";
-import { canAccessCampaign } from "@/lib/portal/guard";
 import { compactViews, formatINR, formatViews } from "@/lib/portal/money";
-import { can, getMe, isStaff } from "@/lib/portal/session";
-import { addDays, currentWeekStart, formatDate, formatWeek } from "@/lib/portal/weeks";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { getMe, isStaff } from "@/lib/portal/session";
+import { currentWeekStart, formatDate, formatWeek } from "@/lib/portal/weeks";
+import { pageApi } from "@/lib/server-api";
 import { ClipperAdder, DeleteCampaign, RemoveClipperButton, StaffManager } from "../_components/Actions";
 import { CampaignForm } from "../_components/CampaignForm";
 import { ShareButton } from "../_components/ShareButton";
-import { CAMPAIGN_COLUMNS, fetchAll, fetchIn, weeklyViewsFor, type CampaignRow } from "../_lib/data";
+import type { CampaignRow } from "../_lib/data";
 import { inviteMessage } from "../_lib/invite";
 import { statusTone } from "../_lib/status";
 
@@ -43,7 +42,21 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
     </Link>
   );
 
-  if (!(await canAccessCampaign(me, params.id))) {
+  const data = await pageApi<{
+    denied: boolean;
+    campaign: CampaignRow;
+    memberCount: number;
+    linkedCount: number;
+    hasViews: boolean;
+    stats: { totalViews: number; totalEarned: number; thisWeekViews: number; lastWeekViews: number; delta: number | null };
+    rows: { id: string; joinedAt: string | null; current: boolean; person: Person | null; accounts: Account[]; totals: { views: number; earned: number } }[];
+    assignedStaff: Person[];
+    availableStaff: Person[];
+    canManage: boolean;
+    isSuper: boolean;
+  }>(`/api/pages/admin/campaigns/${params.id}`, { forbiddenTo: "/login" });
+
+  if (data.denied) {
     return (
       <div className="space-y-8">
         {back}
@@ -52,88 +65,10 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
     );
   }
 
-  const db = getSupabaseAdmin();
-  const { data: campaignData } = await db.from("campaigns").select(CAMPAIGN_COLUMNS).eq("id", params.id).maybeSingle();
-  if (!campaignData) notFound();
-  const c = campaignData as CampaignRow;
-
-  const isSuper = me.role === "super_admin";
-  const canManage = can(me, "campaigns.manage");
-
-  const [members, links, views, staffRows] = await Promise.all([
-    fetchAll<{ clipper_id: string; joined_at: string }>((from, to) =>
-      db.from("campaign_clippers").select("clipper_id, joined_at").eq("campaign_id", c.id).order("joined_at").range(from, to),
-    ),
-    fetchAll<{ account_id: string }>((from, to) =>
-      db.from("campaign_accounts").select("account_id").eq("campaign_id", c.id).order("account_id").range(from, to),
-    ),
-    weeklyViewsFor([c.id]),
-    db.from("campaign_staff").select("staff_id").eq("campaign_id", c.id),
-  ]);
-
-  const linkedIds = new Set(links.map((l) => l.account_id));
-  const accounts = await fetchIn<Account>(
-    [...Array.from(linkedIds), ...views.map((v) => v.account_id)],
-    (chunk, from, to) => db.from("social_accounts").select("id, clipper_id, platform, username, status").in("id", chunk).order("id").range(from, to),
-  );
-  const accountById = new Map(accounts.map((a) => [a.id, a]));
-
-  const memberIds = new Set(members.map((m) => m.clipper_id));
-  const viewClipperIds = views.map((v) => accountById.get(v.account_id)?.clipper_id).filter((x): x is string => !!x);
-  const people = await fetchIn<Person>([...Array.from(memberIds), ...viewClipperIds], (chunk, from, to) =>
-    db.from("profiles").select("id, login_id, full_name, status").in("id", chunk).order("id").range(from, to),
-  );
-  const personById = new Map(people.map((p) => [p.id, p]));
-
-  // ---- stats
+  const c = data.campaign;
+  const { rows, assignedStaff, availableStaff, canManage, isSuper } = data;
+  const { totalViews, totalEarned, thisWeekViews, lastWeekViews, delta } = data.stats;
   const thisWeek = currentWeekStart();
-  const lastWeek = addDays(thisWeek, -7);
-  let totalViews = 0;
-  let totalEarned = 0;
-  let thisWeekViews = 0;
-  let lastWeekViews = 0;
-  const perClipper = new Map<string, { views: number; earned: number }>();
-  for (const v of views) {
-    totalViews += Number(v.views);
-    totalEarned += Number(v.amount_paise);
-    if (v.week_start === thisWeek) thisWeekViews += Number(v.views);
-    if (v.week_start === lastWeek) lastWeekViews += Number(v.views);
-    const owner = accountById.get(v.account_id)?.clipper_id;
-    if (!owner) continue;
-    const t = perClipper.get(owner) ?? { views: 0, earned: 0 };
-    t.views += Number(v.views);
-    t.earned += Number(v.amount_paise);
-    perClipper.set(owner, t);
-  }
-  const delta = lastWeekViews > 0 ? Math.round(((thisWeekViews - lastWeekViews) / lastWeekViews) * 100) : null;
-
-  // ---- clipper rows: current members first, then people removed who still have views here
-  const linkedByClipper = new Map<string, Account[]>();
-  for (const id of Array.from(linkedIds)) {
-    const a = accountById.get(id);
-    if (!a) continue;
-    linkedByClipper.set(a.clipper_id, [...(linkedByClipper.get(a.clipper_id) ?? []), a]);
-  }
-  const rows = [
-    ...members.map((m) => ({ id: m.clipper_id, joinedAt: m.joined_at as string | null, current: true })),
-    ...Array.from(perClipper.keys())
-      .filter((id) => !memberIds.has(id))
-      .map((id) => ({ id, joinedAt: null, current: false })),
-  ].map((r) => ({ ...r, person: personById.get(r.id), accounts: linkedByClipper.get(r.id) ?? [], totals: perClipper.get(r.id) ?? { views: 0, earned: 0 } }));
-
-  // ---- staff
-  const assignedStaffIds = (staffRows.data ?? []).map((s) => s.staff_id as string);
-  let assignedStaff: Person[] = [];
-  let availableStaff: Person[] = [];
-  if (isSuper) {
-    const { data } = await db.from("profiles").select("id, login_id, full_name, status").eq("role", "admin").order("full_name");
-    const all = (data ?? []) as Person[];
-    assignedStaff = all.filter((s) => assignedStaffIds.includes(s.id));
-    availableStaff = all.filter((s) => s.status === "active");
-  } else if (assignedStaffIds.length) {
-    const { data } = await db.from("profiles").select("id, login_id, full_name").in("id", assignedStaffIds).order("full_name");
-    assignedStaff = (data ?? []) as Person[];
-  }
 
   const platformNames = c.allowed_platforms.map((p) => PLATFORM_LABELS[p] ?? p);
   const share = inviteMessage({ name: c.name, platforms: platformNames, rateLabel: formatINR(c.rate_per_million_paise), maxAccounts: c.max_accounts_per_clipper });
@@ -158,8 +93,8 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat label="Total views" value={compactViews(totalViews)} sub={formatViews(totalViews)} />
         <Stat label="Earned" value={<span className="text-lime">{formatINR(totalEarned, { decimals: false })}</span>} sub={formatINR(totalEarned)} />
-        <Stat label="Clippers" value={members.length} sub={rows.length > members.length ? `+${rows.length - members.length} removed with past views` : "in this campaign"} />
-        <Stat label="Linked accounts" value={linkedIds.size} sub="counting towards this campaign" />
+        <Stat label="Clippers" value={data.memberCount} sub={rows.length > data.memberCount ? `+${rows.length - data.memberCount} removed with past views` : "in this campaign"} />
+        <Stat label="Linked accounts" value={data.linkedCount} sub="counting towards this campaign" />
         <div className="col-span-2 lg:col-span-1">
           <Stat
             label="This week"
@@ -311,7 +246,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
               <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#ff8a7a]">Danger zone</p>
               <h2 className="mt-1 font-display text-2xl font-bold uppercase">Delete campaign</h2>
               <div className="mt-4">
-                <DeleteCampaign campaignId={c.id} name={c.name} hasViews={views.length > 0} />
+                <DeleteCampaign campaignId={c.id} name={c.name} hasViews={data.hasViews} />
               </div>
             </Card>
           )}

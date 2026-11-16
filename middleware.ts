@@ -1,31 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
-// Keeps the Supabase session fresh and sends signed-out visitors to /login.
-// Roles and permissions are enforced in the pages and API routes (getMe / can), not here.
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    cookies: {
-      getAll: () => request.cookies.getAll(),
-      setAll: (list) => {
-        list.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        list.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-      },
-    },
-  });
-
-  // getClaims() refreshes an expired session and verifies the JWT locally — no Auth server round trip.
-  const { data } = await supabase.auth.getClaims();
-  if (!data?.claims?.sub) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-  return response;
+// Sends visitors without a session cookie to /login. The cookie itself is checked against the
+// database (and roles/permissions enforced) in the pages and API routes via getMe() / can().
+export function middleware(request: NextRequest) {
+  if (request.cookies.get("cc_session")?.value) return NextResponse.next();
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  return NextResponse.redirect(url);
 }
 
 export const config = { matcher: ["/admin/:path*", "/portal/:path*"] };

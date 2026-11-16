@@ -1,0 +1,33 @@
+{
+  "name": "clipcrew-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "node scripts/gen-routes.mjs",
+    "predev": "npm run gen",
+    "dev": "tsx watch --env-file-if-exists=.env.local src/server.ts",
+    "prebuild": "npm run gen",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node20 --packages=external --sourcemap --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs",
+    "pretypecheck": "npm run gen",
+    "typecheck": "tsc --noEmit",
+    "migrate": "node db/migrate.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.4.3",
+    "fastify": "^5.12.8",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

@@ -2,12 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowUpRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { getSupabaseAdmin } from "@/lib/supabase";
+import { pageApi } from "@/lib/server-api";
 import { getMe } from "@/lib/portal/session";
 import { formatINR, formatViews } from "@/lib/portal/money";
 import { formatDate, formatWeek } from "@/lib/portal/weeks";
 import { EmptyState, Label, PageTitle, Pill, PLATFORM_LABELS, TableWrap, td, th, tr } from "@/components/portal/ui";
-import { accountLabel, loadBalance, loadClipperEarnings } from "@/components/portal/earnings/data";
+import { accountLabel, hydrateEarnings, type EarningsPayload } from "@/components/portal/earnings/data";
 
 export const dynamic = "force-dynamic";
 
@@ -29,27 +29,22 @@ export default async function WalletPage({ searchParams }: { searchParams: { sho
   if (!me) redirect("/login");
   if (me.role !== "clipper") redirect("/admin");
 
-  const db = getSupabaseAdmin();
-  const [balance, earnings, profileRes, payoutsRes, finesRes] = await Promise.all([
-    loadBalance(me.id),
-    loadClipperEarnings(me.id),
-    db.from("profiles").select("upi_id").eq("id", me.id).maybeSingle(),
-    db.from("payouts").select("id, amount_paise, paid_on, reference, note").eq("clipper_id", me.id).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
-    db.from("fines").select("id, amount_paise, reason, reel_ref, campaign_id, created_at, waived_at").eq("clipper_id", me.id).order("created_at", { ascending: false }),
-  ]);
-
-  const upi = profileRes.data?.upi_id as string | null | undefined;
-  const payouts = payoutsRes.data ?? [];
-  const fines = finesRes.data ?? [];
-  const loadError = payoutsRes.error || finesRes.error;
-
-  // Campaign names for fines (a fine may point at a campaign the clipper has since left).
-  const campaignNames = new Map(Array.from(earnings.campaigns.values()).map((c) => [c.id, c.name]));
-  const missing = Array.from(new Set(fines.map((f) => f.campaign_id).filter((id): id is string => !!id && !campaignNames.has(id))));
-  if (missing.length) {
-    const { data } = await db.from("campaigns").select("id, name").in("id", missing);
-    for (const c of data ?? []) campaignNames.set(c.id, c.name);
-  }
+  const raw = await pageApi<
+    EarningsPayload & {
+      upi: string | null;
+      payouts: { id: string; amount_paise: number; paid_on: string; reference: string | null; note: string | null }[];
+      fines: { id: string; amount_paise: number; reason: string; reel_ref: string | null; campaign_id: string | null; created_at: string; waived_at: string | null }[];
+      campaignNames: Record<string, string>;
+      loadError: boolean;
+    }
+  >("/api/pages/portal/wallet", { forbiddenTo: "/login" });
+  const earnings = hydrateEarnings(raw);
+  const balance = earnings.balance;
+  const upi = raw.upi;
+  const payouts = raw.payouts;
+  const fines = raw.fines;
+  const loadError = raw.loadError;
+  const campaignNames = new Map(Object.entries(raw.campaignNames));
 
   const show = Math.min(Math.max(Number.parseInt(searchParams.show ?? "", 10) || STEP, STEP), 5000);
   const weekly = earnings.rows; // already newest first
