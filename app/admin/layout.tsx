@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { LogoutButton } from "@/components/portal/LogoutButton";
-import { NavLinks } from "@/components/portal/NavLinks";
+import { AppShell, type ShellItem } from "@/components/portal/AppShell";
+import { SIDEBAR_COOKIE } from "@/lib/portal/sidebar";
 import { can, getMe, isStaff } from "@/lib/portal/session";
 import { getNavCounts } from "@/lib/portal/navCounts";
 
@@ -15,48 +15,32 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const counts = await getNavCounts(); // menu badges; shows none if the numbers can't load
 
-  const nav = [
-    { href: "/admin", label: "Overview", show: true },
-    { href: "/admin/campaigns", label: "Campaigns", show: true }, // staff see the campaigns assigned to them
-    { href: "/admin/views", label: "Weekly views", show: can(me, "views.enter") },
-    { href: "/admin/submissions", label: "Submissions", show: can(me, "submissions.review"), badge: counts.pendingSubmissions },
-    { href: "/admin/accounts", label: "Accounts", show: can(me, "accounts.verify"), badge: counts.pendingAccounts },
-    { href: "/admin/clippers", label: "Clippers", show: can(me, "users.create") },
-    { href: "/admin/notices", label: "Notices", show: can(me, "campaigns.manage") },
-    { href: "/admin/rejections", label: "Rejections & fines", show: can(me, "rejections.send") || can(me, "fines.create") },
-    { href: "/admin/payouts", label: "Payouts", show: can(me, "payouts.manage") },
-    { href: "/admin/users", label: "Users", show: can(me, "users.create") },
-    { href: "/admin/invites", label: "Invite links", show: me.role === "super_admin" },
-    { href: "/admin/activity", label: "Activity", show: can(me, "audit.view") },
-    { href: "/admin/settings", label: "Settings", show: true },
-  ]
-    .filter((n) => n.show)
-    .map(({ href, label, badge }) => ({ href, label, badge }));
+  const nav: (ShellItem & { show: boolean })[] = [
+    { href: "/admin", label: "Overview", icon: "overview", show: true },
+    { href: "/admin/campaigns", label: "Campaigns", icon: "campaigns", show: true }, // staff see the campaigns assigned to them
+    { href: "/admin/views", label: "Weekly views", icon: "views", show: can(me, "views.enter") },
+    { href: "/admin/submissions", label: "Submissions", icon: "submissions", show: can(me, "submissions.review"), badge: counts.pendingSubmissions },
+    { href: "/admin/accounts", label: "Accounts", icon: "accounts", show: can(me, "accounts.verify"), badge: counts.pendingAccounts },
+    { href: "/admin/clippers", label: "Clippers", icon: "clippers", show: can(me, "users.create") },
+    { href: "/admin/notices", label: "Notices", icon: "notices", show: can(me, "campaigns.manage") },
+    { href: "/admin/rejections", label: "Rejections & fines", icon: "rejections", show: can(me, "rejections.send") || can(me, "fines.create") },
+    { href: "/admin/payouts", label: "Payouts", icon: "payouts", show: can(me, "payouts.manage") },
+    { href: "/admin/users", label: "Users", icon: "users", show: can(me, "users.create") },
+    { href: "/admin/invites", label: "Invite links", icon: "invites", show: me.role === "super_admin" },
+    { href: "/admin/activity", label: "Activity", icon: "activity", show: can(me, "audit.view") },
+    { href: "/admin/settings", label: "Settings", icon: "settings", show: true },
+  ];
 
   return (
-    <div className="min-h-screen bg-ink text-cream">
-      <header className="sticky top-0 z-40 border-b border-line bg-ink/90 backdrop-blur-md">
-        <div className="mx-auto max-w-[1280px] px-5 md:px-8">
-          <div className="flex items-center justify-between gap-4 py-4">
-            <Link href="/admin" className="font-display text-xl font-bold uppercase tracking-wide">
-              ClipCrew <span className="font-mono text-[10px] tracking-[0.2em] text-lime">ADMIN</span>
-            </Link>
-            <div className="flex items-center gap-4">
-              <span className="hidden text-sm text-muted-dark sm:block">
-                {me.fullName} ·{" "}
-                <span className="font-mono text-xs uppercase tracking-[0.14em] text-lime">
-                  {me.role === "super_admin" ? "super admin" : "staff"}
-                </span>
-              </span>
-              <LogoutButton />
-            </div>
-          </div>
-          <div className="pb-3">
-            <NavLinks items={nav} root="/admin" />
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-[1280px] px-5 py-10 md:px-8">{children}</main>
-    </div>
+    <AppShell
+      root="/admin"
+      brandTag="ADMIN"
+      items={nav.filter((n) => n.show).map((n) => ({ href: n.href, label: n.label, icon: n.icon, badge: n.badge }))}
+      userName={me.fullName}
+      userRole={me.role === "super_admin" ? "super admin" : "staff"}
+      initialCollapsed={cookies().get(SIDEBAR_COOKIE)?.value === "collapsed"}
+    >
+      {children}
+    </AppShell>
   );
 }
